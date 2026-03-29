@@ -75,7 +75,7 @@ async def get_session(
 
     return SessionResponse(
         session_id=session_id,
-        user_id="unknown",  # Would need to track from database
+        user_id=context.user_id,
         pai_instance_id=context.pai_instance_id,
         created_at=datetime.now(timezone.utc),
         session_type="chat",

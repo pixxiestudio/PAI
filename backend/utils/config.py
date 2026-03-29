@@ -75,6 +75,11 @@ class Settings(BaseSettings):
 
     # Security
     encryption_key: Optional[str] = Field(default=None, env="ENCRYPTION_KEY")
+    jwt_secret_key: Optional[str] = Field(
+        default="dev-secret-key-change-in-production",
+        env="JWT_SECRET_KEY",
+        description="Secret key for JWT token signing. Change in production!"
+    )
 
     class Config:
         env_file = ".env"

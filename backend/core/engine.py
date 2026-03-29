@@ -28,6 +28,7 @@ class ConversationContext:
 
     Attributes:
         session_id: Unique conversation session identifier (UUID)
+        user_id: User identifier who owns this session
         pai_instance_id: The specific PAI instance handling this session.
             Maps to PAIInstance.id in database. Enables:
             - Multi-PAI instance support (different specializations)
@@ -39,6 +40,7 @@ class ConversationContext:
         max_tokens: Maximum tokens in response
     """
     session_id: str
+    user_id: str
     pai_instance_id: str
     messages: List[Dict[str, str]]
     model: str = settings.default_model
@@ -112,9 +114,10 @@ Always aim to be:
 
         session_id = str(uuid.uuid4())
 
-        # Store in memory with pai_instance_id mapping
+        # Store in memory with user_id and pai_instance_id mapping
         self.sessions[session_id] = ConversationContext(
             session_id=session_id,
+            user_id=user_id,
             pai_instance_id=pai_instance_id,
             messages=[],
             model=settings.default_model

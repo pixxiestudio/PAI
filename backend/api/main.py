@@ -22,6 +22,8 @@ from backend.core.container import ServiceContainer
 from backend.utils.config import settings
 from backend.api.middleware.error_handler import setup_exception_handlers
 from backend.api.middleware.logging import setup_logging_middleware
+from backend.api.middleware.auth import JWTAuthMiddleware
+from backend.api.middleware.rate_limit import RateLimitMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -95,6 +97,12 @@ setup_exception_handlers(app)
 # Setup logging middleware
 setup_logging_middleware(app)
 
+# Add JWT authentication middleware
+app.add_middleware(JWTAuthMiddleware)
+
+# Add rate limiting middleware
+app.add_middleware(RateLimitMiddleware)
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -111,8 +119,9 @@ app.add_middleware(
 )
 
 # Include API routes
-from backend.api.v1 import sessions, messages, memory, learning, skills, health
+from backend.api.v1 import sessions, messages, memory, learning, skills, health, auth
 
+app.include_router(auth.router, prefix="/api/v1", tags=["auth"])
 app.include_router(sessions.router, prefix="/api/v1", tags=["sessions"])
 app.include_router(messages.router, prefix="/api/v1", tags=["messages"])
 app.include_router(memory.router, prefix="/api/v1", tags=["memory"])
