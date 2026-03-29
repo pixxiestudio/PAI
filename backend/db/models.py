@@ -54,7 +54,7 @@ class Activity(Base):
     activity_type = Column(String(100), index=True)  # "message", "subagent_spawn", "skill_invoke", etc.
     activity_data = Column(JSON)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    metadata = Column(JSON, nullable=True)
+    additional_metadata = Column(JSON, nullable=True)  # Renamed from 'metadata' to avoid SQLAlchemy reserved name
 
     # Relationships
     session = relationship("Session", back_populates="activities")
