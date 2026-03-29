@@ -1,20 +1,11 @@
 'use client';
 
 import React from 'react';
-import {
-  QueryClient,
-  QueryClientProvider,
-} from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient } from '@/lib/react-query-config';
 
-// Create a client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
-    },
-  },
-});
+// Create a client with optimized settings
+const queryClient = createQueryClient();
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
