@@ -192,15 +192,18 @@ tests/
 
 ### What Phase 3 Delivers:
 
-#### A) Web Dashboard (React)
-- 🆕 Modern web UI for chat with PAI
+#### A) Web Dashboard (Next.js)
+- 🆕 Modern web UI for chat with PAI (Next.js 14+)
+- 🆕 Server-side rendering for better SEO and performance
+- 🆕 API routes for backend integration
 - 🆕 Multi-session management
 - 🆕 Memory browser and editor
 - 🆕 Learning progress visualization
 - 🆕 Skill library browser
 - 🆕 Settings and preferences
-- 🆕 Dark mode support
+- 🆕 Dark mode support with next-themes
 - 🆕 Mobile-responsive design
+- 🆕 Real-time updates with WebSocket (optional)
 
 #### B) Telegram Bot Integration
 - 🆕 Telegram bot using telegram.py library
@@ -241,39 +244,104 @@ tests/
 - 🆕 Multi-language support (UI + content)
 
 ### Technology Stack:
-- **Frontend**: React 18+, TypeScript, TailwindCSS
-- **Package Manager**: npm or pnpm
-- **State Management**: TanStack Query + Zustand
-- **API Client**: axios or fetch
-- **UI Components**: Shadcn/UI or Material-UI
-- **Build**: Vite (faster than Create React App)
+- **Frontend Framework**: Next.js 14+ (App Router)
+- **Language**: TypeScript
+- **Styling**: TailwindCSS
+- **UI Components**: Shadcn/UI (Next.js optimized)
+- **State Management**: TanStack Query (React Query) + Zustand
+- **HTTP Client**: Fetch API with next-fetch or axios
+- **Auth**: NextAuth.js for JWT/OAuth
+- **Database ORM**: Prisma (optional, for caching)
+- **Real-time**: Socket.io or WebSocket (optional)
+- **Dark Mode**: next-themes
+- **Package Manager**: pnpm (preferred for monorepo)
 - **Bot Framework**: telegram.py (async, modern)
 - **Cloud Integration**: AWS SDK for file storage
 
 ### Directory Structure (Phase 3):
 ```
 frontend/
-├── public/
-├── src/
-│   ├── components/
-│   │   ├── Chat.tsx
-│   │   ├── Memory.tsx
-│   │   ├── Learning.tsx
-│   │   ├── Skills.tsx
-│   │   └── Settings.tsx
-│   ├── pages/
-│   │   ├── Dashboard.tsx
-│   │   ├── Login.tsx
-│   │   └── Debate.tsx
-│   ├── hooks/
-│   │   ├── useChat.ts
-│   │   └── usePAI.ts
+├── app/
+│   ├── layout.tsx              # Root layout with providers
+│   ├── page.tsx                # Home/dashboard page
+│   ├── login/
+│   │   └── page.tsx            # Authentication page
+│   ├── chat/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx            # Main chat interface
+│   │   ├── [sessionId]/
+│   │   │   └── page.tsx        # Individual session
+│   │   └── loading.tsx         # Loading state
+│   ├── memory/
+│   │   ├── page.tsx            # Memory browser
+│   │   └── [memoryId]/
+│   │       └── page.tsx        # Memory details
+│   ├── learning/
+│   │   ├── page.tsx            # Learning progress
+│   │   └── [paiId]/
+│   │       └── page.tsx        # Instance learning
+│   ├── skills/
+│   │   ├── page.tsx            # Skill library
+│   │   └── [skillId]/
+│   │       └── page.tsx        # Skill execution
+│   ├── settings/
+│   │   └── page.tsx            # User settings
+│   ├── debate/
+│   │   ├── page.tsx            # Debate list
+│   │   └── [debateId]/
+│   │       └── page.tsx        # Active debate
 │   ├── api/
-│   │   └── client.ts
-│   ├── App.tsx
-│   └── main.tsx
-├── package.json
-└── vite.config.ts
+│   │   ├── auth/[...nextauth].ts  # NextAuth routes
+│   │   ├── proxy/
+│   │   │   └── [...path].ts       # API proxy routes
+│   │   └── webhooks/
+│   │       └── telegram.ts        # Telegram webhook
+│   └── globals.css
+├── components/
+│   ├── ui/
+│   │   ├── Button.tsx
+│   │   ├── Card.tsx
+│   │   ├── Dialog.tsx
+│   │   └── ...                  # Shadcn/UI components
+│   ├── Chat/
+│   │   ├── ChatWindow.tsx
+│   │   ├── MessageList.tsx
+│   │   └── InputBox.tsx
+│   ├── Memory/
+│   │   ├── MemoryBrowser.tsx
+│   │   └── MemoryCard.tsx
+│   ├── Learning/
+│   │   ├── LearningChart.tsx
+│   │   └── PatternList.tsx
+│   ├── Navigation/
+│   │   ├── Navbar.tsx
+│   │   └── Sidebar.tsx
+│   └── Providers.tsx            # Auth, theme providers
+├── hooks/
+│   ├── useChat.ts
+│   ├── useMemory.ts
+│   ├── useLearning.ts
+│   ├── usePAI.ts
+│   ├── useAuth.ts
+│   └── useApi.ts
+├── lib/
+│   ├── api-client.ts            # HTTP client for REST API
+│   ├── auth.ts                  # Authentication logic
+│   ├── utils.ts                 # Utility functions
+│   └── constants.ts             # API endpoints, etc.
+├── styles/
+│   └── globals.css              # Global styles
+├── types/
+│   ├── index.ts
+│   ├── api.ts                   # API response types
+│   └── models.ts                # Data models
+├── public/
+│   └── ...                      # Static assets
+├── next.config.js               # Next.js configuration
+├── tsconfig.json
+├── tailwind.config.js
+├── .env.local                   # Local environment variables
+└── package.json
 
 integrations/
 ├── telegram/
