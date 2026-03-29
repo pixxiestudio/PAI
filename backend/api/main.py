@@ -119,7 +119,7 @@ app.add_middleware(
 )
 
 # Include API routes
-from backend.api.v1 import sessions, messages, memory, learning, skills, health, auth, github
+from backend.api.v1 import sessions, messages, memory, learning, skills, health, auth, github, files
 
 app.include_router(auth.router, prefix="/api/v1", tags=["auth"])
 app.include_router(sessions.router, prefix="/api/v1", tags=["sessions"])
@@ -128,6 +128,7 @@ app.include_router(memory.router, prefix="/api/v1", tags=["memory"])
 app.include_router(learning.router, prefix="/api/v1", tags=["learning"])
 app.include_router(skills.router, prefix="/api/v1", tags=["skills"])
 app.include_router(github.router, prefix="/api/v1", tags=["github"])
+app.include_router(files.router, prefix="/api/v1", tags=["files"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 
 
