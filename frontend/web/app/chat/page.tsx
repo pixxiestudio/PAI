@@ -1,23 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Send, Plus, MessageSquare } from 'lucide-react';
+import { Send, Plus, MessageSquare, Square } from 'lucide-react';
 import { useChat, useSessions } from '@/hooks/useChat';
 import { useUser } from '@/contexts/UserContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ErrorAlert } from '@/components/ErrorDisplay';
 import { MessageListSkeleton } from '@/components/LoadingStates';
 import { useErrorHandler } from '@/hooks/useAsyncOperation';
+import { useStreaming } from '@/hooks/useStreaming';
 
 function ChatPageContent() {
   const { user } = useUser();
   const [sessionId, setSessionId] = useState<string>('');
   const [message, setMessage] = useState('');
+  const [streamingMessage, setStreamingMessage] = useState('');
   const { error: sessionError, handleError } = useErrorHandler();
 
   // Fetch user's sessions
@@ -38,6 +40,14 @@ function ChatPageContent() {
     isSending,
   } = useChat(sessionId);
 
+  // Streaming support
+  const { startStream, stopStream, isStreaming, content: streamedContent } = useStreaming();
+
+  // Update streaming message when content changes
+  useEffect(() => {
+    setStreamingMessage(streamedContent);
+  }, [streamedContent]);
+
   const handleCreateNewChat = async () => {
     try {
       const newSession = await createSession('New Chat');
@@ -48,13 +58,33 @@ function ChatPageContent() {
     }
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || !sessionId) return;
 
+    const userMessage = message;
+    setMessage('');
+    setStreamingMessage('');
+
     try {
-      sendMessage(message);
-      setMessage('');
+      // Send the user message first
+      await sendMessage(userMessage);
+
+      // Start streaming the AI response
+      // Note: This assumes the API supports streaming at /api/proxy/sessions/{id}/stream
+      await startStream({
+        endpoint: `/api/proxy/sessions/${sessionId}/stream?message=${encodeURIComponent(userMessage)}`,
+        onChunk: (chunk) => {
+          setStreamingMessage((prev) => prev + chunk);
+        },
+        onComplete: (fullContent) => {
+          // Store the complete streamed message
+          console.log('Stream completed:', fullContent);
+        },
+        onError: (err) => {
+          handleError(err);
+        },
+      });
     } catch (err) {
       handleError(err);
     }
@@ -177,24 +207,36 @@ function ChatPageContent() {
                     <p>Start a conversation with your PAI instance</p>
                   </div>
                 ) : (
-                  messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex ${
-                        msg.role === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
+                  <>
+                    {messages.map((msg) => (
                       <div
-                        className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-3 rounded-lg ${
-                          msg.role === 'user'
-                            ? 'bg-pai-primary text-white rounded-br-none'
-                            : 'bg-gray-100 text-gray-900 rounded-bl-none'
+                        key={msg.id}
+                        className={`flex ${
+                          msg.role === 'user' ? 'justify-end' : 'justify-start'
                         }`}
                       >
-                        <p className="text-sm">{msg.content}</p>
+                        <div
+                          className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-3 rounded-lg ${
+                            msg.role === 'user'
+                              ? 'bg-pai-primary text-white rounded-br-none'
+                              : 'bg-gray-100 text-gray-900 rounded-bl-none'
+                          }`}
+                        >
+                          <p className="text-sm">{msg.content}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+
+                    {/* Streaming message display */}
+                    {isStreaming && streamingMessage && (
+                      <div className="flex justify-start">
+                        <div className="max-w-xs lg:max-w-md xl:max-w-lg px-4 py-3 rounded-lg bg-gray-100 text-gray-900 rounded-bl-none">
+                          <p className="text-sm whitespace-pre-wrap">{streamingMessage}</p>
+                          <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse" />
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -210,21 +252,33 @@ function ChatPageContent() {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Type your message..."
-                    disabled={isSending}
+                    disabled={isSending || isStreaming}
                     className="flex-1"
                   />
-                  <Button
-                    type="submit"
-                    disabled={!message.trim() || isSending}
-                    size="icon"
-                    variant="default"
-                  >
-                    {isSending ? (
-                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
+                  {isStreaming ? (
+                    <Button
+                      type="button"
+                      onClick={stopStream}
+                      size="icon"
+                      variant="destructive"
+                      title="Stop streaming"
+                    >
+                      <Square className="h-4 w-4 fill-current" />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      disabled={!message.trim() || isSending}
+                      size="icon"
+                      variant="default"
+                    >
+                      {isSending ? (
+                        <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
                 </div>
               </form>
             </div>

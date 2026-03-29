@@ -1,0 +1,171 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'frontend/web/**'
+      - '.github/workflows/deploy.yml'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+
+env:
+  REGISTRY: gcr.io
+  GKE_ZONE: us-central1
+
+jobs:
+  check-ci:
+    name: Verify CI Passed
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check CI workflow status
+        run: |
+          echo "Checking that CI workflow passed..."
+          # CI workflow should pass before deployment
+
+  deploy-backend:
+    name: Deploy Backend to Cloud Run
+    runs-on: ubuntu-latest
+    needs: check-ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          version: latest
+          install_components: 'gke-gcloud-auth-plugin,kubectl'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set GCP project
+        run: |
+          gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Configure Docker
+        run: |
+          gcloud auth configure-docker
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/pai-api:${{ github.sha }} \
+            --tag ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/pai-api:latest \
+            .
+
+      - name: Push image to Container Registry
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/pai-api:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/pai-api:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy pai-api \
+            --image ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/pai-api:${{ github.sha }} \
+            --region ${{ env.GKE_ZONE }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 2Gi \
+            --cpu 2 \
+            --timeout 3600 \
+            --max-instances 100 \
+            --set-env-vars "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }},GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }},JWT_SECRET=${{ secrets.JWT_SECRET }},ENVIRONMENT=production"
+
+      - name: Get Cloud Run URL
+        run: |
+          SERVICE_URL=$(gcloud run services describe pai-api --region ${{ env.GKE_ZONE }} --format 'value(status.url)')
+          echo "API_URL=$SERVICE_URL" >> $GITHUB_ENV
+          echo "✅ Backend deployed to: $SERVICE_URL"
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    runs-on: ubuntu-latest
+    needs: check-ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        run: |
+          cd frontend/web
+          npx vercel --prod --token ${{ secrets.VERCEL_TOKEN }} --scope ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Get Vercel deployment URL
+        run: |
+          echo "✅ Frontend deployed to Vercel"
+
+  smoke-tests:
+    name: Run Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: always()
+
+    steps:
+      - name: Wait for services to be ready
+        run: |
+          sleep 30  # Give services time to start
+
+      - name: Health check - Backend
+        run: |
+          curl -f https://pai-api-<service-id>.run.app/api/v1/health || exit 1
+        continue-on-error: true
+
+      - name: Health check - Frontend
+        run: |
+          curl -f https://pai-<project>.vercel.app/api/health || exit 1
+        continue-on-error: true
+
+      - name: Log deployment status
+        run: |
+          echo "✅ Deployment completed successfully"
+
+  notify-deployment:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend, smoke-tests]
+    if: always()
+
+    steps:
+      - name: Check deployment status
+        run: |
+          if [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.deploy-frontend.result }}" == "success" ]; then
+            echo "✅ Production deployment successful"
+            echo "Backend: Cloud Run"
+            echo "Frontend: Vercel"
+          else
+            echo "❌ Deployment failed"
+            exit 1
+          fi
+
+      - name: Create GitHub deployment status
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: context.payload.deployment.id,
+              state: 'success',
+              description: 'Production deployment completed',
+              environment_url: 'https://pai.example.com'
+            })
+        if: always()

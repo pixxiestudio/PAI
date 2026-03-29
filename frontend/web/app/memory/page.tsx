@@ -23,6 +23,8 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ErrorAlert } from '@/components/ErrorDisplay';
 import { MemoryListSkeleton, EmptyState } from '@/components/LoadingStates';
 import { useErrorHandler } from '@/hooks/useAsyncOperation';
+import { FileUpload } from '@/components/FileUpload';
+import { useFileUpload } from '@/hooks/useFileUpload';
 
 function MemoryPageContent() {
   const { user } = useUser();
@@ -45,6 +47,21 @@ function MemoryPageContent() {
     deleteMemory,
     isDeleting,
   } = useMemory(user?.id || '');
+
+  const { uploadFiles, isUploading, error: uploadError } = useFileUpload({
+    endpoint: `users/${user?.id}/memories/files`,
+    onSuccess: (results) => {
+      // Handle successful uploads
+      const successFiles = results.filter((r) => r.success);
+      if (successFiles.length > 0) {
+        // Optionally update memory with file references
+        console.log('Files uploaded successfully:', successFiles);
+      }
+    },
+    onError: (error) => {
+      handleError(error);
+    },
+  });
 
   const categories = ['preferences', 'interests', 'knowledge', 'patterns'];
 
@@ -182,6 +199,28 @@ function MemoryPageContent() {
                       onChange={(e) => setNewMemory({ ...newMemory, content: e.target.value })}
                       className="min-h-24"
                     />
+
+                    {/* File Upload Section */}
+                    <div className="border-t border-blue-100 pt-4">
+                      <p className="text-sm font-medium text-gray-700 mb-3">
+                        Attach files to this memory (optional)
+                      </p>
+                      <FileUpload
+                        onUpload={uploadFiles}
+                        accept="image/*,.pdf,.txt,.md,.json"
+                        maxSize={10 * 1024 * 1024} // 10MB
+                        maxFiles={5}
+                        disabled={isUploading || isSaving}
+                      />
+                    </div>
+
+                    {uploadError && (
+                      <ErrorAlert
+                        error={uploadError}
+                        title="Upload Error"
+                      />
+                    )}
+
                     <div className="flex gap-2">
                       <select
                         value={newMemory.category}
@@ -197,13 +236,16 @@ function MemoryPageContent() {
                           </option>
                         ))}
                       </select>
-                      <Button type="submit" disabled={isSaving}>
-                        {isSaving ? 'Saving...' : 'Save'}
+                      <Button
+                        type="submit"
+                        disabled={isSaving || isUploading}
+                      >
+                        {isSaving ? 'Saving...' : isUploading ? 'Uploading...' : 'Save'}
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
-                        disabled={isSaving}
+                        disabled={isSaving || isUploading}
                         onClick={() => {
                           setShowNewMemoryForm(false);
                           setNewMemory({ content: '', category: '' });

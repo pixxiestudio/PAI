@@ -82,11 +82,9 @@ export async function POST(
     const pathSegments = await params;
     const path = pathSegments.path.join('/');
     const url = new URL(`${API_BASE_URL}/${path}`);
-    const body = await request.json();
 
-    const headers = new Headers({
-      'Content-Type': 'application/json',
-    });
+    const contentType = request.headers.get('content-type') || '';
+    const headers = new Headers();
 
     if (API_SECRET_KEY) {
       headers.set('X-API-Key', API_SECRET_KEY);
@@ -97,6 +95,21 @@ export async function POST(
       headers.set('Authorization', authHeader);
     }
 
+    let body: BodyInit;
+
+    // Handle multipart/form-data for file uploads
+    if (contentType.includes('multipart/form-data')) {
+      // Pass FormData directly without Content-Type header
+      // The browser will set it with the boundary
+      const formData = await request.formData();
+      body = formData;
+    } else {
+      // Handle JSON requests
+      headers.set('Content-Type', 'application/json');
+      const jsonBody = await request.json();
+      body = JSON.stringify(jsonBody);
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
 
@@ -104,7 +117,7 @@ export async function POST(
       const response = await fetch(url.toString(), {
         method: 'POST',
         headers,
-        body: JSON.stringify(body),
+        body,
         signal: controller.signal,
       });
 
@@ -141,11 +154,9 @@ export async function PUT(
     const pathSegments = await params;
     const path = pathSegments.path.join('/');
     const url = new URL(`${API_BASE_URL}/${path}`);
-    const body = await request.json();
 
-    const headers = new Headers({
-      'Content-Type': 'application/json',
-    });
+    const contentType = request.headers.get('content-type') || '';
+    const headers = new Headers();
 
     if (API_SECRET_KEY) {
       headers.set('X-API-Key', API_SECRET_KEY);
@@ -156,6 +167,20 @@ export async function PUT(
       headers.set('Authorization', authHeader);
     }
 
+    let body: BodyInit;
+
+    // Handle multipart/form-data for file uploads
+    if (contentType.includes('multipart/form-data')) {
+      // Pass FormData directly without Content-Type header
+      const formData = await request.formData();
+      body = formData;
+    } else {
+      // Handle JSON requests
+      headers.set('Content-Type', 'application/json');
+      const jsonBody = await request.json();
+      body = JSON.stringify(jsonBody);
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
 
@@ -163,7 +188,7 @@ export async function PUT(
       const response = await fetch(url.toString(), {
         method: 'PUT',
         headers,
-        body: JSON.stringify(body),
+        body,
         signal: controller.signal,
       });
 
