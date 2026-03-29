@@ -2,13 +2,23 @@
  * Authenticated API Client
  * Automatically injects JWT token from localStorage into all requests
  * Handles token expiration validation before each request
+ * Includes retry logic with exponential backoff
  */
+
+import {
+  ApiErrorWithContext,
+  isRetryableError,
+  exponentialBackoffDelay,
+  handleHttpError,
+} from './error-handler';
 
 interface FetchOptions extends RequestInit {
   timeout?: number;
+  maxRetries?: number;
 }
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
+const DEFAULT_MAX_RETRIES = 3;
 
 /**
  * Get auth header from localStorage if token is valid
@@ -43,64 +53,114 @@ function getAuthHeader(): { Authorization: string } | null {
 }
 
 /**
- * Fetch wrapper with timeout, automatic auth header injection, and error handling
+ * Sleep helper for retry delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch wrapper with timeout, automatic auth header injection, retry logic, and error handling
  */
 async function fetchWithAuth(
   url: string,
   options: FetchOptions = {}
 ): Promise<Response> {
-  const { timeout = DEFAULT_TIMEOUT, ...fetchOptions } = options;
+  const {
+    timeout = DEFAULT_TIMEOUT,
+    maxRetries = DEFAULT_MAX_RETRIES,
+    ...fetchOptions
+  } = options;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  let lastError: Error | null = null;
 
-  try {
-    // Merge auth header if available
-    const headers = new Headers(fetchOptions.headers || {});
-    const authHeader = getAuthHeader();
-    if (authHeader) {
-      headers.set('Authorization', authHeader.Authorization);
-    }
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    const response = await fetch(url, {
-      ...fetchOptions,
-      headers,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      // Handle 401 - token may have been invalidated
-      if (response.status === 401) {
-        localStorage.removeItem('pai_token');
-        localStorage.removeItem('pai_token_expires_at');
-        localStorage.removeItem('pai_user');
-        throw new Error('Unauthorized - please log in again');
+    try {
+      // Merge auth header if available
+      const headers = new Headers(fetchOptions.headers || {});
+      const authHeader = getAuthHeader();
+      if (authHeader) {
+        headers.set('Authorization', authHeader.Authorization);
       }
 
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail ||
-          errorData.error ||
-          `API error: ${response.status}`
-      );
+      const response = await fetch(url, {
+        ...fetchOptions,
+        headers,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        // Handle 401 - clear auth and don't retry
+        if (response.status === 401) {
+          localStorage.removeItem('pai_token');
+          localStorage.removeItem('pai_token_expires_at');
+          localStorage.removeItem('pai_user');
+          const errorData = await response.json().catch(() => ({}));
+          throw handleHttpError(401, errorData);
+        }
+
+        const errorData = await response.json().catch(() => ({}));
+        const apiError = handleHttpError(response.status, errorData);
+
+        // Check if error is retryable
+        if (!isRetryableError(apiError) || attempt === maxRetries) {
+          throw apiError;
+        }
+
+        // Retryable error - wait and retry
+        lastError = apiError;
+        const delayMs = exponentialBackoffDelay(attempt + 1);
+        await sleep(delayMs);
+        continue;
+      }
+
+      return response;
+    } catch (error) {
+      // Handle network/timeout errors
+      if (error instanceof ApiErrorWithContext) {
+        // API error already formatted
+        if (!isRetryableError(error) || attempt === maxRetries) {
+          throw error;
+        }
+        lastError = error;
+        const delayMs = exponentialBackoffDelay(attempt + 1);
+        await sleep(delayMs);
+        continue;
+      }
+
+      // Network/timeout error
+      if (error instanceof Error) {
+        lastError = new ApiErrorWithContext(
+          error.message,
+          undefined,
+          undefined,
+          error
+        );
+
+        if (attempt === maxRetries) {
+          throw lastError;
+        }
+
+        const delayMs = exponentialBackoffDelay(attempt + 1);
+        await sleep(delayMs);
+        continue;
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return response;
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  // Should never reach here, but just in case
+  throw lastError || new Error('Unknown error during fetch');
 }
 
-export class AuthenticatedApiError extends Error {
-  constructor(
-    public message: string,
-    public status?: number,
-    public data: Record<string, any> = {}
-  ) {
-    super(message);
-    this.name = 'AuthenticatedApiError';
-  }
-}
+// Re-export for backward compatibility
+export { ApiErrorWithContext as AuthenticatedApiError } from './error-handler';
 
 /**
  * Authenticated API client
