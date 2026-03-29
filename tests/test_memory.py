@@ -162,25 +162,28 @@ class TestMemorySystem:
     @pytest.mark.asyncio
     async def test_update_memory_importance(self, memory_system, sample_user_id, db_session):
         """Test updating memory importance"""
+        import uuid
         from backend.db.models import Memory as MemoryModel
 
-        # Create memory
+        # Create memory with unique ID
+        memory_id = str(uuid.uuid4())
         memory = MemoryModel(
-            id="test-mem-update",
+            id=memory_id,
             user_id=sample_user_id,
             content="Test",
             memory_type="semantic",
             importance=0.5,
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
+            access_count=0  # Start at 0 so first update increments to 1
         )
         db_session.add(memory)
         db_session.commit()
 
         # Update importance
-        await memory_system.update_memory_importance("test-mem-update", 0.95)
+        await memory_system.update_memory_importance(memory_id, 0.95)
 
         # Verify update
-        updated = db_session.query(MemoryModel).filter_by(id="test-mem-update").first()
+        updated = db_session.query(MemoryModel).filter_by(id=memory_id).first()
         assert updated.importance == 0.95
         assert updated.access_count == 1
 
@@ -235,12 +238,13 @@ class TestMemorySystem:
     @pytest.mark.asyncio
     async def test_optimize_memory(self, memory_system, sample_user_id, db_session):
         """Test memory optimization"""
+        import uuid
         from backend.db.models import Memory as MemoryModel
 
-        # Create old, low-importance memory
+        # Create old, low-importance memory with unique ID
         old_date = datetime.utcnow() - timedelta(days=35)
         old_memory = MemoryModel(
-            id="old-memory",
+            id=str(uuid.uuid4()),
             user_id=sample_user_id,
             content="Old content",
             memory_type="semantic",

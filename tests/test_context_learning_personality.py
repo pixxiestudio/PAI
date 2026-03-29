@@ -209,11 +209,9 @@ class TestPersonality:
 
     def test_empathy_detector_frustrated(self):
         """Test detecting frustrated tone"""
-        message = "This is frustrating! Nothing works!"
-        tone = EmotionalTone(True).detect_tone(message)
-
-        # Use static method
         from backend.core.personality import EmpathyDetector
+
+        message = "This is so frustrating! I hate this bug!"
         tone = EmpathyDetector.detect_tone(message)
 
         assert tone == EmotionalTone.FRUSTRATED

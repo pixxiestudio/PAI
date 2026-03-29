@@ -2,6 +2,7 @@
 import pytest
 import os
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -43,8 +44,9 @@ def db_session(test_db):
 
     yield session
 
-    # Rollback to clean up
+    # Proper cleanup: rollback, expunge all objects, close
     session.rollback()
+    session.expunge_all()
     session.close()
 
 
@@ -83,20 +85,20 @@ def personality_manager(db_session):
 # Test data fixtures
 @pytest.fixture
 def sample_session_id():
-    """Generate a sample session ID"""
-    return "test-session-123"
+    """Generate a unique sample session ID for each test"""
+    return str(uuid.uuid4())
 
 
 @pytest.fixture
 def sample_user_id():
-    """Generate a sample user ID"""
-    return "test-user-456"
+    """Generate a unique sample user ID for each test"""
+    return str(uuid.uuid4())
 
 
 @pytest.fixture
 def sample_pai_instance_id():
-    """Generate a sample PAI instance ID"""
-    return "test-pai-789"
+    """Generate a unique sample PAI instance ID for each test"""
+    return str(uuid.uuid4())
 
 
 @pytest.fixture

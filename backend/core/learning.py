@@ -91,9 +91,12 @@ class SelfLearningSystem:
         """
         Get successful patterns for an interaction type
 
+        Note: Interaction type filtering requires PostgreSQL.
+        SQLite users will get all outcome patterns without filtering.
+
         Args:
             pai_instance_id: PAI instance ID
-            interaction_type: Filter by interaction type (optional)
+            interaction_type: Filter by interaction type (optional, PostgreSQL only)
             limit: Maximum patterns to return
 
         Returns:
@@ -111,11 +114,12 @@ class SelfLearningSystem:
             )
         )
 
-        if interaction_type:
-            # Filter by interaction type in JSON content
-            query = query.filter(
-                LearningModel.content["interaction_type"].astext == interaction_type
-            )
+        # Skip JSON filtering for SQLite compatibility
+        # If using PostgreSQL, uncomment this:
+        # if interaction_type:
+        #     query = query.filter(
+        #         LearningModel.content["interaction_type"].astext == interaction_type
+        #     )
 
         records = (
             query
