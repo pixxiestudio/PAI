@@ -1,9 +1,13 @@
 """Context injection system for PAI - Layer 3 Memory"""
 from typing import Optional, List
 from datetime import datetime
+import logging
 from sqlalchemy.orm import Session as DBSession
 from backend.core.memory import MemorySystem
 from backend.utils.config import settings
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class ContextInjector:

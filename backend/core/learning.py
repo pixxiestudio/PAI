@@ -3,8 +3,12 @@ from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 from datetime import datetime
 import uuid
+import logging
 from sqlalchemy.orm import Session as DBSession
 from backend.db.models import Learning as LearningModel, UserFeedback
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -327,8 +331,14 @@ class SelfLearningSystem:
 
             # Update related learning records
             if rating >= 4:  # Good feedback
-                # Learn from positive feedback
-                pass
+                # Learn from positive feedback - reinforce successful patterns
+                if feedback_text:
+                    await self.learn_user_preference(
+                        pai_instance_id,
+                        "positive_feedback_pattern",
+                        feedback_text,
+                        confidence=0.9
+                    )
             elif rating <= 2:  # Poor feedback
                 # Learn from negative feedback
                 if feedback_text:
@@ -336,7 +346,16 @@ class SelfLearningSystem:
                         pai_instance_id,
                         "correction_from_feedback",
                         feedback_text,
-                        confidence=0.5
+                        confidence=0.6
+                    )
+            else:  # Neutral feedback (rating 3)
+                # Mixed feedback - learn areas for improvement
+                if feedback_text:
+                    await self.learn_user_preference(
+                        pai_instance_id,
+                        "improvement_area",
+                        feedback_text,
+                        confidence=0.7
                     )
 
             self.db_session.commit()

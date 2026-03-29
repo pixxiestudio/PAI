@@ -1,10 +1,14 @@
 """Personality & Empathy System for PAI"""
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+import logging
 from sqlalchemy.orm import Session as DBSession
 from backend.db.models import PAIInstance
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class CommunicationStyle(str, Enum):
@@ -179,7 +183,7 @@ class PersonalityManager:
         self,
         pai_instance_id: str,
         user_message: str
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Detect user context and return adaptation instructions
 
@@ -284,7 +288,7 @@ class PersonalityManager:
         self,
         pai_instance_id: str,
         user_feedback: int,
-        interaction_context: Dict[str, any]
+        interaction_context: Dict[str, Any]
     ) -> None:
         """
         Learn from user feedback to improve personality

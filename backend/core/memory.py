@@ -4,9 +4,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import uuid
 import math
+import logging
 from sqlalchemy.orm import Session as DBSession
 from backend.db.models import Memory as MemoryModel
 from backend.utils.config import settings
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass

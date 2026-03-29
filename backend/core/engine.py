@@ -4,8 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime
 import uuid
 import asyncio
+import logging
 from anthropic import Anthropic
 from backend.utils.config import settings
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -20,13 +24,18 @@ class ConversationContext:
 class PAIEngine:
     """Main AI engine using Claude Code Agent SDK"""
 
-    def __init__(self):
-        """Initialize the Claude API client"""
+    def __init__(self, db_session=None):
+        """Initialize the Claude API client
+
+        Args:
+            db_session: Optional SQLAlchemy database session for persistence
+        """
         if not settings.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY not set in environment")
 
         self.client = Anthropic(api_key=settings.anthropic_api_key)
         self.sessions: Dict[str, ConversationContext] = {}
+        self.db_session = db_session
         self.default_system_prompt = """You are PAI (Personal AI Assistant), a helpful, intelligent, and empathetic AI assistant powered by Claude Code.
 
 You have the following capabilities:
@@ -55,12 +64,33 @@ Always aim to be:
         Returns:
             session_id: Unique session identifier
         """
+        from backend.db.models import Session as SessionModel
+
         session_id = str(uuid.uuid4())
+
+        # Store in memory
         self.sessions[session_id] = ConversationContext(
             session_id=session_id,
             messages=[],
             model=settings.default_model
         )
+
+        # Persist to database
+        if self.db_session:
+            try:
+                db_session = SessionModel(
+                    id=session_id,
+                    user_id=user_id,
+                    session_type=session_type,
+                    created_at=datetime.utcnow()
+                )
+                self.db_session.add(db_session)
+                self.db_session.commit()
+                logger.info(f"Session {session_id} created for user {user_id}")
+            except Exception as e:
+                logger.error(f"Error saving session to database: {str(e)}")
+                # Continue anyway - session exists in memory
+
         return session_id
 
     async def send_message(
@@ -71,7 +101,7 @@ Always aim to be:
         model: Optional[str] = None
     ) -> str:
         """
-        Send a message and get a response
+        Send a message and get a response (async-safe)
 
         Args:
             session_id: Session identifier
@@ -100,16 +130,14 @@ Always aim to be:
             system_prompt += f"\n\nRelevant context from previous interactions:\n{context_injection}"
 
         try:
-            # Call Claude API
-            response = self.client.messages.create(
-                model=current_model,
-                max_tokens=context.max_tokens,
-                system=system_prompt,
-                messages=context.messages
+            # Use asyncio.to_thread to properly handle sync API call without blocking event loop
+            response_text = await asyncio.to_thread(
+                self._call_claude_api,
+                current_model,
+                context.max_tokens,
+                system_prompt,
+                context.messages.copy()
             )
-
-            # Extract response text
-            response_text = response.content[0].text
 
             # Add assistant response to history
             context.messages.append({
@@ -117,10 +145,39 @@ Always aim to be:
                 "content": response_text
             })
 
+            logger.debug(f"Message sent in session {session_id}, response length: {len(response_text)}")
             return response_text
 
         except Exception as e:
+            logger.error(f"Error calling Claude API: {str(e)}")
             raise RuntimeError(f"Error calling Claude API: {str(e)}")
+
+    def _call_claude_api(
+        self,
+        model: str,
+        max_tokens: int,
+        system_prompt: str,
+        messages: List[Dict[str, str]]
+    ) -> str:
+        """
+        Synchronous wrapper for Claude API call (runs in thread)
+
+        Args:
+            model: Model to use
+            max_tokens: Max tokens in response
+            system_prompt: System prompt
+            messages: Message history
+
+        Returns:
+            Response text
+        """
+        response = self.client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=messages
+        )
+        return response.content[0].text
 
     async def stream_message(
         self,
@@ -130,7 +187,7 @@ Always aim to be:
         model: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """
-        Send a message and stream the response
+        Send a message and stream the response (async-safe)
 
         Args:
             session_id: Session identifier
@@ -160,16 +217,16 @@ Always aim to be:
 
         full_response = ""
         try:
-            # Stream response from Claude
-            with self.client.messages.stream(
-                model=current_model,
-                max_tokens=context.max_tokens,
-                system=system_prompt,
-                messages=context.messages
-            ) as stream:
-                for text in stream.text_stream:
-                    full_response += text
-                    yield text
+            # Use asyncio.to_thread to properly handle streaming
+            async for chunk in await asyncio.to_thread(
+                self._stream_claude_api,
+                current_model,
+                context.max_tokens,
+                system_prompt,
+                context.messages.copy()
+            ):
+                full_response += chunk
+                yield chunk
 
             # Add full assistant response to history
             context.messages.append({
@@ -177,8 +234,39 @@ Always aim to be:
                 "content": full_response
             })
 
+            logger.debug(f"Stream completed in session {session_id}, response length: {len(full_response)}")
+
         except Exception as e:
+            logger.error(f"Error streaming from Claude API: {str(e)}")
             raise RuntimeError(f"Error streaming from Claude API: {str(e)}")
+
+    def _stream_claude_api(
+        self,
+        model: str,
+        max_tokens: int,
+        system_prompt: str,
+        messages: List[Dict[str, str]]
+    ) -> AsyncGenerator[str, None]:
+        """
+        Synchronous stream wrapper for Claude API (runs in thread)
+
+        Args:
+            model: Model to use
+            max_tokens: Max tokens in response
+            system_prompt: System prompt
+            messages: Message history
+
+        Yields:
+            Response text chunks
+        """
+        with self.client.messages.stream(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=messages
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
 
     async def get_session_history(self, session_id: str) -> List[Dict[str, str]]:
         """Get conversation history for a session"""
@@ -201,8 +289,21 @@ Always aim to be:
 
     async def end_session(self, session_id: str) -> None:
         """End a session and clean up"""
+        from backend.db.models import Session as SessionModel
+
         if session_id in self.sessions:
-            # In future, save session to database
+            # Update database to mark session as ended
+            if self.db_session:
+                try:
+                    db_session = self.db_session.query(SessionModel).filter_by(id=session_id).first()
+                    if db_session:
+                        db_session.ended_at = datetime.utcnow()
+                        self.db_session.commit()
+                        logger.info(f"Session {session_id} ended")
+                except Exception as e:
+                    logger.error(f"Error ending session in database: {str(e)}")
+
+            # Remove from memory
             del self.sessions[session_id]
 
     def set_model(self, session_id: str, model: str) -> None:
