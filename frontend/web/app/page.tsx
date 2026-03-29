@@ -27,25 +27,29 @@ export default function Home() {
               </div>
             </Link>
 
-            <div className="border-2 border-pai-secondary rounded-lg p-6 hover:shadow-lg transition opacity-50 cursor-not-allowed">
-              <h2 className="text-xl font-semibold text-pai-secondary mb-2">
-                🧠 Memory
-              </h2>
-              <p className="text-gray-600">
-                Browse and manage memories learned by your PAI instance.
-              </p>
-              <p className="text-xs text-gray-400 mt-4">Coming in Phase 3.2</p>
-            </div>
+            <Link href="/memory">
+              <div className="border-2 border-pai-secondary rounded-lg p-6 hover:shadow-lg hover:border-opacity-100 transition cursor-pointer bg-gradient-to-br from-purple-50 to-purple-100">
+                <h2 className="text-xl font-semibold text-pai-secondary mb-2">
+                  🧠 Memory
+                </h2>
+                <p className="text-gray-600">
+                  Browse and manage memories learned by your PAI instance.
+                </p>
+                <p className="text-sm text-gray-500 mt-4">Click to open →</p>
+              </div>
+            </Link>
 
-            <div className="border-2 border-pai-accent rounded-lg p-6 hover:shadow-lg transition opacity-50 cursor-not-allowed">
-              <h2 className="text-xl font-semibold text-pai-accent mb-2">
-                📊 Learning
-              </h2>
-              <p className="text-gray-600">
-                View learning patterns and effectiveness metrics.
-              </p>
-              <p className="text-xs text-gray-400 mt-4">Coming in Phase 3.2</p>
-            </div>
+            <Link href="/learning">
+              <div className="border-2 border-pai-accent rounded-lg p-6 hover:shadow-lg hover:border-opacity-100 transition cursor-pointer bg-gradient-to-br from-pink-50 to-pink-100">
+                <h2 className="text-xl font-semibold text-pai-accent mb-2">
+                  📊 Learning
+                </h2>
+                <p className="text-gray-600">
+                  View learning patterns and effectiveness metrics.
+                </p>
+                <p className="text-sm text-gray-500 mt-4">Click to open →</p>
+              </div>
+            </Link>
           </div>
 
           <div className="mt-12 p-6 bg-pai-dark text-white rounded-lg">
