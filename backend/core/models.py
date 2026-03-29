@@ -49,15 +49,17 @@ class SessionResponse(BaseModel):
     """Session creation/info response"""
     session_id: str = Field(..., description="Unique session identifier")
     user_id: str = Field(..., description="User identifier")
+    pai_instance_id: str = Field(..., description="PAI instance ID (maps to specific specialization)")
     created_at: datetime = Field(..., description="Session creation timestamp")
     session_type: str = Field(default="chat", description="Session type")
+    message_count: Optional[int] = Field(None, description="Number of messages in session")
 
 
 class SessionHistoryResponse(BaseModel):
     """Conversation history response"""
     session_id: str = Field(..., description="Session identifier")
     messages: List[Message] = Field(..., description="Conversation messages")
-    message_count: int = Field(..., description="Total message count")
+    total: int = Field(..., description="Total message count")
 
 
 class SendMessageRequest(BaseModel):
@@ -92,7 +94,7 @@ class GetMemoriesResponse(BaseModel):
     """Get memories response"""
     user_id: str = Field(..., description="User identifier")
     memories: List[MemoryEntryResponse] = Field(..., description="Retrieved memories")
-    total_count: int = Field(..., description="Total memory count")
+    total: int = Field(..., description="Total memory count")
 
 
 class SaveMemoryRequest(BaseModel):

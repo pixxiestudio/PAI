@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # PAI API Server
+  api:
+    build: .
+    container_name: pai-api
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: "true"
+      DATABASE_URL: "sqlite:///./pai.db"
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
+      LOG_LEVEL: "INFO"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+    volumes:
+      - .:/app
+      - ./pai.db:/app/pai.db
+    command: python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - redis
+    networks:
+      - pai-network
+
+  # Redis Cache (optional, for session store)
+  redis:
+    image: redis:7-alpine
+    container_name: pai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - pai-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:
+
+networks:
+  pai-network:
+    driver: bridge

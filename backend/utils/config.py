@@ -14,11 +14,30 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", env="HOST")
     port: int = Field(default=8000, env="PORT")
 
+    # API Configuration
+    api_host: str = Field(default="0.0.0.0", env="API_HOST")
+    api_port: int = Field(default=8000, env="API_PORT")
+    api_prefix: str = Field(default="/api/v1", env="API_PREFIX")
+
+    # CORS Configuration
+    cors_origins: list = Field(
+        default=["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:3000"],
+        env="CORS_ORIGINS"
+    )
+    allowed_hosts: list = Field(
+        default=["localhost", "127.0.0.1", "*"],
+        env="ALLOWED_HOSTS"
+    )
+
+    # Logging Configuration
+    log_level: str = Field(default="INFO", env="LOG_LEVEL")
+
     # Database Configuration
     database_url: str = Field(
         default="sqlite:///./pai.db",
         env="DATABASE_URL"
     )
+    database_echo: bool = Field(default=False, env="DATABASE_ECHO")
 
     # API Keys
     anthropic_api_key: Optional[str] = Field(default=None, env="ANTHROPIC_API_KEY")
