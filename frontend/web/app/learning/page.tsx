@@ -13,80 +13,22 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
+import { useLearning } from '@/hooks/useLearning';
+import { useUser } from '@/contexts/UserContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorAlert } from '@/components/ErrorDisplay';
+import { LearningDashboardSkeleton } from '@/components/LoadingStates';
 
-interface LearningPattern {
-  id: string;
-  pattern: string;
-  frequency: number;
-  effectiveness: number;
-  trend: 'up' | 'down' | 'stable';
-}
-
-interface Preference {
-  id: string;
-  preference: string;
-  weight: number;
-  source: string;
-}
-
-export default function LearningPage() {
-  const [patterns] = useState<LearningPattern[]>([
-    {
-      id: '1',
-      pattern: 'User prefers code examples in responses',
-      frequency: 24,
-      effectiveness: 0.92,
-      trend: 'up',
-    },
-    {
-      id: '2',
-      pattern: 'User values concise explanations',
-      frequency: 18,
-      effectiveness: 0.85,
-      trend: 'up',
-    },
-    {
-      id: '3',
-      pattern: 'User asks follow-up questions on technical topics',
-      frequency: 12,
-      effectiveness: 0.88,
-      trend: 'stable',
-    },
-    {
-      id: '4',
-      pattern: 'User prefers structured output (lists/tables)',
-      frequency: 8,
-      effectiveness: 0.79,
-      trend: 'down',
-    },
-  ]);
-
-  const [preferences] = useState<Preference[]>([
-    {
-      id: '1',
-      preference: 'TypeScript over JavaScript',
-      weight: 0.95,
-      source: 'interaction_history',
-    },
-    {
-      id: '2',
-      preference: 'React for UI frameworks',
-      weight: 0.88,
-      source: 'explicit_feedback',
-    },
-    {
-      id: '3',
-      preference: 'Functional programming patterns',
-      weight: 0.82,
-      source: 'interaction_history',
-    },
-    {
-      id: '4',
-      preference: 'Fast responses over detailed explanations',
-      weight: 0.71,
-      source: 'behavioral_analysis',
-    },
-  ]);
+function LearningPageContent() {
+  const { user } = useUser();
+  const {
+    patterns = [],
+    preferences = [],
+    successRate = 0,
+    totalInteractions = 0,
+    isLoading,
+    error,
+  } = useLearning(user?.paiInstanceId || '');
 
   const getTrendIcon = (trend: string) => {
     switch (trend) {
@@ -124,6 +66,16 @@ export default function LearningPage() {
         {/* Content */}
         <div className="flex-1 p-4">
           <div className="max-w-7xl mx-auto space-y-6">
+            {error && (
+              <ErrorAlert
+                error={error}
+                title="Learning Data Error"
+              />
+            )}
+
+            {isLoading && <LearningDashboardSkeleton />}
+            {!isLoading && (
+            <>
             {/* Overview Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Card>
@@ -134,9 +86,9 @@ export default function LearningPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-pai-primary">
-                    1,284
+                    {totalInteractions}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">+12% from last week</p>
+                  <p className="text-xs text-gray-500 mt-1">tracked interactions</p>
                 </CardContent>
               </Card>
 
@@ -148,11 +100,9 @@ export default function LearningPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-pai-secondary">
-                    87.3%
+                    {Math.round(successRate * 100)}%
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    <span className="text-green-600">↑ 2.1%</span> improvement
-                  </p>
+                  <p className="text-xs text-gray-500 mt-1">overall performance</p>
                 </CardContent>
               </Card>
 
@@ -322,9 +272,23 @@ export default function LearningPage() {
               <Button variant="outline">Download Report</Button>
               <Button variant="default">Export Learning Data</Button>
             </div>
+            </>
+            )}
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LearningPage() {
+  return (
+    <ErrorBoundary
+      onError={(error) => {
+        console.error('Learning page error:', error);
+      }}
+    >
+      <LearningPageContent />
+    </ErrorBoundary>
   );
 }

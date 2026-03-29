@@ -7,38 +7,61 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Send, Plus, MessageSquare } from 'lucide-react';
+import { useChat, useSessions } from '@/hooks/useChat';
+import { useUser } from '@/contexts/UserContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorAlert } from '@/components/ErrorDisplay';
+import { MessageListSkeleton } from '@/components/LoadingStates';
+import { useErrorHandler } from '@/hooks/useAsyncOperation';
 
-export default function ChatPage() {
+function ChatPageContent() {
+  const { user } = useUser();
   const [sessionId, setSessionId] = useState<string>('');
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const { error: sessionError, handleError } = useErrorHandler();
 
-  const handleCreateNewChat = () => {
-    setSessionId(`chat-${Date.now()}`);
-    setMessages([]);
-    setMessage('');
+  // Fetch user's sessions
+  const {
+    sessions,
+    isLoading: sessionsLoading,
+    error: sessionsError,
+    createSession,
+    isCreating,
+  } = useSessions(user?.id || '');
+
+  // Fetch messages for current session
+  const {
+    messages,
+    isLoading: messagesLoading,
+    error: messagesError,
+    sendMessage,
+    isSending,
+  } = useChat(sessionId);
+
+  const handleCreateNewChat = async () => {
+    try {
+      const newSession = await createSession('New Chat');
+      setSessionId(newSession.id);
+      setMessage('');
+    } catch (err) {
+      handleError(err);
+    }
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || !sessionId) return;
 
-    // Add user message
-    const userMessage = { role: 'user' as const, content: message };
-    setMessages((prev) => [...prev, userMessage]);
-
-    // TODO: Send to API via useChat hook
-    // Simulate assistant response
-    setTimeout(() => {
-      const assistantMessage = {
-        role: 'assistant' as const,
-        content: `Echo: ${message}`,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-    }, 500);
-
-    setMessage('');
+    try {
+      sendMessage(message);
+      setMessage('');
+    } catch (err) {
+      handleError(err);
+    }
   };
+
+  const isLoading = messagesLoading || sessionsLoading;
+  const error = messagesError || sessionsError || sessionError;
 
   return (
     <main className="min-h-screen bg-gray-100">
@@ -114,6 +137,14 @@ export default function ChatPage() {
 
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {error && (
+              <ErrorAlert
+                error={error}
+                onRetry={() => {}}
+                title="Chat Error"
+              />
+            )}
+
             {!sessionId ? (
               <div className="h-full flex items-center justify-center">
                 <Card className="w-full max-w-md">
@@ -126,26 +157,29 @@ export default function ChatPage() {
                     </p>
                     <Button
                       onClick={handleCreateNewChat}
+                      disabled={isCreating}
                       className="w-full"
                       variant="default"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Create New Chat
+                      {isCreating ? 'Creating...' : 'Create New Chat'}
                     </Button>
                   </CardContent>
                 </Card>
               </div>
             ) : (
               <div className="space-y-4 max-w-2xl mx-auto w-full">
-                {messages.length === 0 ? (
+                {isLoading ? (
+                  <MessageListSkeleton />
+                ) : messages.length === 0 ? (
                   <div className="text-center text-gray-500 py-8">
                     <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-30" />
                     <p>Start a conversation with your PAI instance</p>
                   </div>
                 ) : (
-                  messages.map((msg, idx) => (
+                  messages.map((msg) => (
                     <div
-                      key={idx}
+                      key={msg.id}
                       className={`flex ${
                         msg.role === 'user' ? 'justify-end' : 'justify-start'
                       }`}
@@ -176,15 +210,20 @@ export default function ChatPage() {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Type your message..."
+                    disabled={isSending}
                     className="flex-1"
                   />
                   <Button
                     type="submit"
-                    disabled={!message.trim()}
+                    disabled={!message.trim() || isSending}
                     size="icon"
                     variant="default"
                   >
-                    <Send className="h-4 w-4" />
+                    {isSending ? (
+                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
               </form>
@@ -193,5 +232,17 @@ export default function ChatPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <ErrorBoundary
+      onError={(error) => {
+        console.error('Chat page error:', error);
+      }}
+    >
+      <ChatPageContent />
+    </ErrorBoundary>
   );
 }

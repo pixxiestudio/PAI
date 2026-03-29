@@ -17,41 +17,34 @@ import {
   EyeOff,
   ChevronDown,
 } from 'lucide-react';
+import { useMemory, Memory } from '@/hooks/useMemory';
+import { useUser } from '@/contexts/UserContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorAlert } from '@/components/ErrorDisplay';
+import { MemoryListSkeleton, EmptyState } from '@/components/LoadingStates';
+import { useErrorHandler } from '@/hooks/useAsyncOperation';
 
-interface Memory {
-  id: string;
-  content: string;
-  category: string;
-  importance: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export default function MemoryPage() {
-  const [memories, setMemories] = useState<Memory[]>([
-    {
-      id: '1',
-      content: 'User prefers detailed technical explanations',
-      category: 'preferences',
-      importance: 0.8,
-      createdAt: '2024-03-20T10:00:00Z',
-      updatedAt: '2024-03-20T10:00:00Z',
-    },
-    {
-      id: '2',
-      content: 'User is interested in AI research and machine learning',
-      category: 'interests',
-      importance: 0.9,
-      createdAt: '2024-03-20T11:30:00Z',
-      updatedAt: '2024-03-20T11:30:00Z',
-    },
-  ]);
+function MemoryPageContent() {
+  const { user } = useUser();
+  const { error: operationError, handleError } = useErrorHandler();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedMemoryId, setExpandedMemoryId] = useState<string | null>(null);
   const [showNewMemoryForm, setShowNewMemoryForm] = useState(false);
   const [newMemory, setNewMemory] = useState({ content: '', category: '' });
+
+  const {
+    memories,
+    isLoading,
+    error: memoryError,
+    saveMemory,
+    isSaving,
+    updateImportance,
+    isUpdating,
+    deleteMemory,
+    isDeleting,
+  } = useMemory(user?.id || '');
 
   const categories = ['preferences', 'interests', 'knowledge', 'patterns'];
 
@@ -63,34 +56,37 @@ export default function MemoryPage() {
     return matchesSearch && matchesCategory;
   });
 
-  const handleAddMemory = (e: React.FormEvent) => {
+  const handleAddMemory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMemory.content.trim()) return;
 
-    const memory: Memory = {
-      id: `${Date.now()}`,
-      content: newMemory.content,
-      category: newMemory.category || 'knowledge',
-      importance: 0.5,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setMemories((prev) => [memory, ...prev]);
-    setNewMemory({ content: '', category: '' });
-    setShowNewMemoryForm(false);
+    try {
+      await saveMemory({
+        content: newMemory.content,
+        category: newMemory.category || 'knowledge',
+        importance: 0.5,
+      });
+      setNewMemory({ content: '', category: '' });
+      setShowNewMemoryForm(false);
+    } catch (err) {
+      handleError(err);
+    }
   };
 
-  const handleDeleteMemory = (id: string) => {
-    setMemories((prev) => prev.filter((m) => m.id !== id));
+  const handleDeleteMemory = async (id: string) => {
+    try {
+      await deleteMemory(id);
+    } catch (err) {
+      handleError(err);
+    }
   };
 
-  const handleUpdateImportance = (id: string, newImportance: number) => {
-    setMemories((prev) =>
-      prev.map((m) =>
-        m.id === id ? { ...m, importance: newImportance, updatedAt: new Date().toISOString() } : m
-      )
-    );
+  const handleUpdateImportance = async (id: string, newImportance: number) => {
+    try {
+      await updateImportance(id, newImportance);
+    } catch (err) {
+      handleError(err);
+    }
   };
 
   const getImportanceBadgeColor = (importance: number) => {
@@ -118,6 +114,12 @@ export default function MemoryPage() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
           <div className="max-w-7xl mx-auto space-y-4">
+            {(memoryError || operationError) && (
+              <ErrorAlert
+                error={memoryError || operationError}
+                title="Memory Error"
+              />
+            )}
             {/* Controls */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Search */}
@@ -195,10 +197,13 @@ export default function MemoryPage() {
                           </option>
                         ))}
                       </select>
-                      <Button type="submit">Save</Button>
+                      <Button type="submit" disabled={isSaving}>
+                        {isSaving ? 'Saving...' : 'Save'}
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
+                        disabled={isSaving}
                         onClick={() => {
                           setShowNewMemoryForm(false);
                           setNewMemory({ content: '', category: '' });
@@ -214,11 +219,16 @@ export default function MemoryPage() {
 
             {/* Memories Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredMemories.length === 0 ? (
+              {isLoading ? (
+                <MemoryListSkeleton />
+              ) : filteredMemories.length === 0 ? (
                 <Card className="md:col-span-2">
-                  <CardContent className="pt-6 text-center text-gray-500">
-                    <Brain className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                    <p>No memories found. Create one to get started!</p>
+                  <CardContent className="pt-6">
+                    <EmptyState
+                      title="No memories found"
+                      description="Create one to get started!"
+                      icon={Brain}
+                    />
                   </CardContent>
                 </Card>
               ) : (
@@ -308,6 +318,7 @@ export default function MemoryPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          disabled={isDeleting}
                           className="text-red-500 hover:text-red-700"
                           onClick={() => handleDeleteMemory(memory.id)}
                         >
@@ -365,5 +376,17 @@ export default function MemoryPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function MemoryPage() {
+  return (
+    <ErrorBoundary
+      onError={(error) => {
+        console.error('Memory page error:', error);
+      }}
+    >
+      <MemoryPageContent />
+    </ErrorBoundary>
   );
 }
