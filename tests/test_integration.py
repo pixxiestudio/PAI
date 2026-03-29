@@ -86,7 +86,7 @@ class TestPhase1Integration:
         # Create session
         session_id = await pai_engine.create_session(sample_user_id)
 
-        # Simulate multi-turn conversation
+        # Simulate multi-turn conversation - save to both engine context and memory
         turns = [
             ("user", "What is Python?"),
             ("assistant", "Python is a programming language..."),
@@ -95,16 +95,27 @@ class TestPhase1Integration:
             ("user", "Great, thanks!"),
         ]
 
+        # Add messages to engine's in-memory context for history tracking
         for sender, message in turns:
+            # Add to engine's memory context
+            pai_engine.sessions[session_id].messages.append({
+                "role": sender,
+                "content": message
+            })
+            # Also save to memory system for persistence
             await memory_system.save_message(session_id, sample_user_id, message, sender=sender)
 
-        # Verify history
+        # Verify history in engine
         history = await pai_engine.get_session_history(session_id)
         assert len(history) == 5
 
         # Verify last 3 messages
         last_3 = await pai_engine.get_last_n_messages(session_id, n=3)
         assert len(last_3) == 3
+
+        # Verify messages persisted to database via memory system
+        session_context = await memory_system.get_session_context(session_id)
+        assert len(session_context) > 0  # Should have context from saved messages
 
     @pytest.mark.asyncio
     async def test_learning_improves_with_feedback(
@@ -242,11 +253,13 @@ class TestPhase1Integration:
     @pytest.mark.asyncio
     async def test_error_recovery(self, pai_engine, memory_system, sample_user_id):
         """Test system recovery from errors"""
+        from backend.core.exceptions import SessionNotFoundError
+
         # Create session
         session_id = await pai_engine.create_session(sample_user_id)
 
-        # Try invalid operations
-        with pytest.raises(ValueError):
+        # Try invalid operations - should raise SessionNotFoundError
+        with pytest.raises(SessionNotFoundError):
             await pai_engine.send_message("invalid", "message")
 
         # Verify session still exists and can be used

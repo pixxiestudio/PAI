@@ -44,25 +44,56 @@ class SkillRegistry:
         if self.db_session:
             self._save_skill_to_db(skill)
 
-    def unregister(self, skill_name: str) -> None:
+    async def unregister(self, skill_name: str) -> None:
         """
-        Unregister a skill from memory
+        Unregister a skill from memory and call cleanup
+
+        This method MUST be called from within an async context (e.g., from
+        ServiceContainer.shutdown()). Calling from synchronous code will result
+        in RuntimeError. If you need to unregister from sync context, use
+        unregister_sync() instead.
+
+        Args:
+            skill_name: Name of skill to unregister
+
+        Raises:
+            RuntimeError: If not called from within an async context
+        """
+        if skill_name in self.loaded_skills:
+            skill = self.loaded_skills[skill_name]
+            # Allow skill to cleanup asynchronously
+            try:
+                await skill.cleanup()
+            except Exception as e:
+                logger.warning(
+                    f"Error during skill cleanup for '{skill_name}': {str(e)}. "
+                    f"Proceeding with unregistration."
+                )
+
+            del self.loaded_skills[skill_name]
+            logger.info(f"Unregistered skill: {skill_name}")
+        else:
+            logger.debug(f"Skill '{skill_name}' not found in registry")
+
+    def unregister_sync(self, skill_name: str) -> None:
+        """
+        Synchronous version of unregister for use outside async contexts
+
+        WARNING: This version does NOT call skill.cleanup(). Use unregister()
+        from async context whenever possible to ensure proper cleanup.
 
         Args:
             skill_name: Name of skill to unregister
         """
         if skill_name in self.loaded_skills:
-            skill = self.loaded_skills[skill_name]
-            # Allow skill to cleanup
-            import asyncio
-            try:
-                asyncio.run(skill.cleanup())
-            except RuntimeError:
-                # If already in event loop, skip cleanup
-                pass
-
             del self.loaded_skills[skill_name]
-            logger.info(f"Unregistered skill: {skill_name}")
+            logger.info(f"Unregistered skill (sync): {skill_name}")
+            logger.warning(
+                f"Skill '{skill_name}' cleanup was skipped (sync unregister). "
+                f"Use async unregister() for proper cleanup."
+            )
+        else:
+            logger.debug(f"Skill '{skill_name}' not found in registry")
 
     def get_skill(self, skill_name: str) -> Optional[Skill]:
         """

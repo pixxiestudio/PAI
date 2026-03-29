@@ -1,7 +1,7 @@
 """Self-Learning System for PAI"""
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import logging
 from sqlalchemy.orm import Session as DBSession
@@ -73,7 +73,7 @@ class SelfLearningSystem:
             },
             effectiveness_score=quality_score if success else 0.5,
             applied_count=0,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
 
         if self.db_session:
@@ -179,7 +179,7 @@ class SelfLearningSystem:
             },
             effectiveness_score=success_rate,
             applied_count=0,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
 
         if self.db_session:
@@ -253,7 +253,7 @@ class SelfLearningSystem:
             },
             effectiveness_score=confidence,
             applied_count=0,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
 
         if self.db_session:
@@ -329,7 +329,7 @@ class SelfLearningSystem:
                 rating=rating,
                 feedback_text=feedback_text,
                 quality_score=quality_score,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
             self.db_session.add(feedback)
 
@@ -396,7 +396,7 @@ class SelfLearningSystem:
             },
             effectiveness_score=success_rate,
             applied_count=0,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
 
         if self.db_session:

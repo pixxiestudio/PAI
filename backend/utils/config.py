@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # Memory Configuration
     max_session_history: int = 10
     memory_db_path: str = Field(default="./pai_memory.db", env="MEMORY_DB_PATH")
+    memory_decay_lambda: float = Field(
+        default=0.1,
+        env="MEMORY_DECAY_LAMBDA",
+        description="Exponential decay rate for memory importance. Formula: importance = base × e^(-lambda × age_days)"
+    )
 
     # Security
     encryption_key: Optional[str] = Field(default=None, env="ENCRYPTION_KEY")

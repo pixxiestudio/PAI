@@ -1,7 +1,7 @@
 """3-Layer Memory System for PAI"""
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 import math
 import logging
@@ -28,15 +28,19 @@ class MemoryEntry:
 class MemorySystem:
     """3-Layer Memory Architecture for PAI"""
 
-    def __init__(self, db_session: Optional[DBSession] = None):
+    def __init__(self, db_session: Optional[DBSession] = None,
+                 memory_decay_lambda: Optional[float] = None):
         """
         Initialize memory system
 
         Args:
             db_session: SQLAlchemy database session for persistence
+            memory_decay_lambda: Exponential decay rate for memory importance
+                                Uses settings.memory_decay_lambda if not provided
+                                Formula: importance = base × e^(-lambda × age_days)
         """
         self.db_session = db_session
-        self.memory_decay_lambda = 0.1  # Time decay parameter
+        self.memory_decay_lambda = memory_decay_lambda or settings.memory_decay_lambda
 
     # Layer 1: Session Memory (Conversation History)
 
@@ -60,7 +64,7 @@ class MemorySystem:
             memory_id: Unique memory identifier
         """
         memory_id = str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         memory_entry = MemoryModel(
             id=memory_id,
@@ -142,7 +146,7 @@ class MemorySystem:
             memory_id: Unique memory identifier
         """
         memory_id = str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         memory_entry = MemoryModel(
             id=memory_id,
@@ -173,7 +177,13 @@ class MemorySystem:
         Returns:
             Computed importance score (0-1)
         """
-        age_days = (datetime.utcnow() - memory.created_at).days
+        # Handle both timezone-aware and naive datetimes from database
+        created_at = memory.created_at
+        if created_at.tzinfo is None:
+            # SQLite returns naive datetimes; assume UTC
+            created_at = created_at.replace(tzinfo=timezone.utc)
+
+        age_days = (datetime.now(timezone.utc) - created_at).days
         decayed = memory.importance * math.exp(-self.memory_decay_lambda * age_days)
         return max(0.0, min(1.0, decayed))  # Clamp to [0, 1]
 
@@ -248,7 +258,7 @@ class MemorySystem:
         memory = self.db_session.query(MemoryModel).filter_by(id=memory_id).first()
         if memory:
             memory.importance = max(0.0, min(1.0, new_importance))
-            memory.accessed_at = datetime.utcnow()
+            memory.accessed_at = datetime.now(timezone.utc)
             memory.access_count += 1
             self.db_session.commit()
 
@@ -326,7 +336,7 @@ class MemorySystem:
             return {"deleted": 0}
 
         # Remove memories older than 30 days with importance < 0.1
-        cutoff_date = datetime.utcnow() - timedelta(days=30)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=30)
         old_low_importance = (
             self.db_session.query(MemoryModel)
             .filter(

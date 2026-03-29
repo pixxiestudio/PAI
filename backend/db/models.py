@@ -4,26 +4,47 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
+
+
+def _utc_now():
+    """Return current time in UTC timezone"""
+    return datetime.now(timezone.utc)
 
 
 Base = declarative_base()
 
 
 class Session(Base):
-    """User conversation session"""
+    """User conversation session with PAI instance association
+
+    Represents a conversation session between a user and a specific PAI instance.
+    Each session is bound to one PAI instance for the duration of the session,
+    enabling per-instance personality, learning, and specialization.
+
+    Foreign Key Constraints:
+        - pai_instance_id references PAIInstance.id (ensures PAI exists)
+        This is enforced at the database level in Phase 2+ with PostgreSQL.
+    """
     __tablename__ = "sessions"
 
     id = Column(String(36), primary_key=True)  # UUID
     user_id = Column(String(255), index=True)
-    pai_instance_id = Column(String(255), index=True)
+    pai_instance_id = Column(
+        String(255),
+        ForeignKey("pai_instances.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=False,
+        doc="FK to PAIInstance.id - ensures session is bound to valid PAI"
+    )
     session_type = Column(String(50))  # "chat", "skill_execution", "debate", "learning"
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
     ended_at = Column(DateTime, nullable=True)
 
     # Relationships
+    pai_instance = relationship("PAIInstance", foreign_keys=[pai_instance_id])
     messages = relationship("Message", back_populates="session")
     activities = relationship("Activity", back_populates="session")
 
@@ -86,8 +107,8 @@ class Skill(Base):
     path = Column(String(500))  # File path to skill
     enabled = Column(Boolean, default=True, index=True)
     parameters = Column(JSON)  # Required parameters
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationships
     executions = relationship("SkillExecution", back_populates="skill")
@@ -122,8 +143,8 @@ class Integration(Base):
     integration_type = Column(String(100), index=True)  # "github", "telegram", etc.
     config_data = Column(JSON)  # Encrypted credentials
     enabled = Column(Boolean, default=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
 
 class PAIInstance(Base):
@@ -137,8 +158,8 @@ class PAIInstance(Base):
     enabled = Column(Boolean, default=True, index=True)
     personality_profile = Column(JSON)  # Personality traits and preferences
     knowledge_domains = Column(JSON)  # Domain restrictions
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationships
     learnings = relationship("Learning", back_populates="pai_instance")
@@ -186,5 +207,5 @@ class DebateRecord(Base):
     votes = Column(JSON)  # Vote records
     consensus_score = Column(Float)
     winner = Column(String(255), nullable=True)  # Consensus solution
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
     completed_at = Column(DateTime, nullable=True)

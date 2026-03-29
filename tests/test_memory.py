@@ -1,7 +1,7 @@
 """Tests for backend/core/memory.py - 3-Layer Memory System"""
 import pytest
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from backend.db.models import Memory as MemoryModel
 
 
@@ -98,7 +98,7 @@ class TestMemorySystem:
             content="Test",
             memory_type="semantic",
             importance=1.0,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
         db_session.add(memory)
         db_session.commit()
@@ -116,7 +116,7 @@ class TestMemorySystem:
         from backend.db.models import Memory as MemoryModel
 
         # Create old memory (30 days old)
-        old_date = datetime.utcnow() - timedelta(days=30)
+        old_date = datetime.now(timezone.utc) - timedelta(days=30)
         memory = MemoryModel(
             id="test-memory-old",
             content="Test",
@@ -173,7 +173,7 @@ class TestMemorySystem:
             content="Test",
             memory_type="semantic",
             importance=0.5,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             access_count=0  # Start at 0 so first update increments to 1
         )
         db_session.add(memory)
@@ -242,7 +242,7 @@ class TestMemorySystem:
         from backend.db.models import Memory as MemoryModel
 
         # Create old, low-importance memory with unique ID
-        old_date = datetime.utcnow() - timedelta(days=35)
+        old_date = datetime.now(timezone.utc) - timedelta(days=35)
         old_memory = MemoryModel(
             id=str(uuid.uuid4()),
             user_id=sample_user_id,

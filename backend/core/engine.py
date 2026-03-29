@@ -1,12 +1,18 @@
 """Claude Code Agent SDK wrapper - Core AI Engine for PAI"""
 from typing import Optional, List, Dict, Any, AsyncGenerator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import asyncio
 import logging
 from anthropic import Anthropic
 from backend.utils.config import settings
+from backend.core.exceptions import (
+    SessionNotFoundError,
+    InvalidMessageError,
+    MessageTooLongError,
+    APIKeyError
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -14,11 +20,34 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ConversationContext:
-    """Context for a conversation session"""
+    """Context for a conversation session
+
+    Represents the in-memory state of a conversation session with a specific
+    PAI instance. Maps to Session record in database with foreign key relationship
+    to PAIInstance.
+
+    Attributes:
+        session_id: Unique conversation session identifier (UUID)
+        pai_instance_id: The specific PAI instance handling this session.
+            Maps to PAIInstance.id in database. Enables:
+            - Multi-PAI instance support (different specializations)
+            - Per-instance learning and personality profiles
+            - Debate participation tracking
+            - Per-instance skill availability
+        messages: Conversation history (role, content pairs)
+        model: Claude model to use (Haiku/Sonnet/Opus, configurable per session)
+        max_tokens: Maximum tokens in response
+    """
     session_id: str
+    pai_instance_id: str
     messages: List[Dict[str, str]]
     model: str = settings.default_model
     max_tokens: int = 4096
+
+
+# Constants
+MAX_MESSAGE_LENGTH = 50000  # Maximum characters per message
+MIN_MESSAGE_LENGTH = 1  # Minimum characters per message
 
 
 class PAIEngine:
@@ -31,7 +60,7 @@ class PAIEngine:
             db_session: Optional SQLAlchemy database session for persistence
         """
         if not settings.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set in environment")
+            raise APIKeyError("ANTHROPIC_API_KEY not set in environment")
 
         self.client = Anthropic(api_key=settings.anthropic_api_key)
         self.sessions: Dict[str, ConversationContext] = {}
@@ -53,40 +82,60 @@ Always aim to be:
 - Honest about limitations and uncertainties
 - Focused on practical, actionable solutions"""
 
-    async def create_session(self, user_id: str, session_type: str = "chat") -> str:
+    async def create_session(
+        self,
+        user_id: str,
+        pai_instance_id: Optional[str] = None,
+        session_type: str = "chat"
+    ) -> str:
         """
         Create a new conversation session
 
         Args:
             user_id: User identifier
+            pai_instance_id: ID of the PAI instance handling this session.
+                If not provided, will use default PAI instance.
+                Maps to PAIInstance.id in database.
             session_type: Type of session (chat, skill_execution, debate, learning)
 
         Returns:
             session_id: Unique session identifier
+
+        Raises:
+            APIKeyError: If Anthropic API key not configured
         """
         from backend.db.models import Session as SessionModel
 
+        # Use default PAI if not specified
+        if not pai_instance_id:
+            pai_instance_id = "default"
+
         session_id = str(uuid.uuid4())
 
-        # Store in memory
+        # Store in memory with pai_instance_id mapping
         self.sessions[session_id] = ConversationContext(
             session_id=session_id,
+            pai_instance_id=pai_instance_id,
             messages=[],
             model=settings.default_model
         )
 
-        # Persist to database
+        # Persist to database with timezone-aware datetime
         if self.db_session:
             try:
                 db_session = SessionModel(
                     id=session_id,
                     user_id=user_id,
+                    pai_instance_id=pai_instance_id,
                     session_type=session_type,
-                    created_at=datetime.utcnow()
+                    created_at=datetime.now(timezone.utc)
                 )
                 self.db_session.add(db_session)
                 self.db_session.commit()
-                logger.info(f"Session {session_id} created for user {user_id}")
+                logger.info(
+                    f"Session {session_id} created for user {user_id} "
+                    f"on PAI instance {pai_instance_id}"
+                )
             except Exception as e:
                 logger.error(f"Error saving session to database: {str(e)}")
                 # Continue anyway - session exists in memory
@@ -111,9 +160,24 @@ Always aim to be:
 
         Returns:
             Response text from Claude
+
+        Raises:
+            SessionNotFoundError: Session doesn't exist
+            InvalidMessageError: Message is empty
+            MessageTooLongError: Message exceeds maximum length
         """
+        # Validate session exists
         if session_id not in self.sessions:
-            raise ValueError(f"Session {session_id} not found")
+            raise SessionNotFoundError(f"Session {session_id} not found")
+
+        # Validate message
+        if not user_message or len(user_message.strip()) < MIN_MESSAGE_LENGTH:
+            raise InvalidMessageError("Message cannot be empty")
+
+        if len(user_message) > MAX_MESSAGE_LENGTH:
+            raise MessageTooLongError(
+                f"Message exceeds maximum length ({len(user_message)} > {MAX_MESSAGE_LENGTH} characters)"
+            )
 
         context = self.sessions[session_id]
         current_model = model or context.model
@@ -199,7 +263,7 @@ Always aim to be:
             Response text chunks
         """
         if session_id not in self.sessions:
-            raise ValueError(f"Session {session_id} not found")
+            raise SessionNotFoundError(f"Session {session_id} not found")
 
         context = self.sessions[session_id]
         current_model = model or context.model
@@ -271,7 +335,7 @@ Always aim to be:
     async def get_session_history(self, session_id: str) -> List[Dict[str, str]]:
         """Get conversation history for a session"""
         if session_id not in self.sessions:
-            raise ValueError(f"Session {session_id} not found")
+            raise SessionNotFoundError(f"Session {session_id} not found")
 
         return self.sessions[session_id].messages
 
@@ -282,7 +346,7 @@ Always aim to be:
     ) -> List[Dict[str, str]]:
         """Get last N messages from a session"""
         if session_id not in self.sessions:
-            raise ValueError(f"Session {session_id} not found")
+            raise SessionNotFoundError(f"Session {session_id} not found")
 
         messages = self.sessions[session_id].messages
         return messages[-n:] if len(messages) > n else messages
@@ -292,12 +356,12 @@ Always aim to be:
         from backend.db.models import Session as SessionModel
 
         if session_id in self.sessions:
-            # Update database to mark session as ended
+            # Update database to mark session as ended (with timezone-aware datetime)
             if self.db_session:
                 try:
                     db_session = self.db_session.query(SessionModel).filter_by(id=session_id).first()
                     if db_session:
-                        db_session.ended_at = datetime.utcnow()
+                        db_session.ended_at = datetime.now(timezone.utc)
                         self.db_session.commit()
                         logger.info(f"Session {session_id} ended")
                 except Exception as e:
@@ -309,14 +373,14 @@ Always aim to be:
     def set_model(self, session_id: str, model: str) -> None:
         """Set the model for a specific session"""
         if session_id not in self.sessions:
-            raise ValueError(f"Session {session_id} not found")
+            raise SessionNotFoundError(f"Session {session_id} not found")
 
         self.sessions[session_id].model = model
 
     def clear_history(self, session_id: str) -> None:
         """Clear conversation history for a session"""
         if session_id not in self.sessions:
-            raise ValueError(f"Session {session_id} not found")
+            raise SessionNotFoundError(f"Session {session_id} not found")
 
         self.sessions[session_id].messages = []
 

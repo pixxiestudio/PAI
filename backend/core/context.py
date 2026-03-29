@@ -1,6 +1,6 @@
 """Context injection system for PAI - Layer 3 Memory"""
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from sqlalchemy.orm import Session as DBSession
 from backend.core.memory import MemorySystem
@@ -85,7 +85,12 @@ class ContextInjector:
         lines = []
         for mem in memories:
             importance_pct = f"{mem.importance * 100:.0f}%"
-            days_old = (datetime.utcnow() - mem.created_at).days
+            # Handle both timezone-aware and naive datetimes from database
+            created_at = mem.created_at
+            if created_at.tzinfo is None:
+                # SQLite returns naive datetimes; assume UTC
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            days_old = (datetime.now(timezone.utc) - created_at).days
             age_indicator = f"({days_old}d old)"
 
             lines.append(f"• {mem.content[:150]} [{importance_pct} {age_indicator}]")

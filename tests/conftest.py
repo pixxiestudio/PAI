@@ -6,6 +6,9 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+# Set mock API key for testing BEFORE importing backend modules
+os.environ.setdefault("ANTHROPIC_API_KEY", "sk-test-mock-key-for-testing-only")
+
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
