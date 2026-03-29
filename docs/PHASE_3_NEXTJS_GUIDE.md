@@ -1,51 +1,233 @@
-# Phase 3: Web Dashboard & Integrations - Next.js Implementation Guide
+# Phase 3: Web Dashboard & Integrations - Next.js Modern Stack
 
 **Status**: Ready for Implementation
 **Framework**: Next.js 14+ (App Router)
+**UI Library**: shadcn/ui (Radix primitives + Tailwind CSS v4)
 **Estimated Duration**: 3-4 weeks
 
 ---
 
-## Overview
+## Tech Stack
 
-Phase 3 brings the PAI project to end-users through:
-1. **Next.js Web Dashboard** - Full-featured chat interface
-2. **Telegram Bot** - Mobile access
-3. **GitHub Integration** - Developer workflow
-4. **Multi-Instance Management** - Advanced features
-5. **Debate System** - Multi-PAI collaboration
+### Core Stack (2024+)
 
-This guide focuses on the Next.js dashboard implementation, which connects to the Phase 2 REST API.
+```
+Frontend Framework:    Next.js 14+ (App Router)
+UI Components:         shadcn/ui (Radix primitives)
+Styling:               Tailwind CSS v4 (JIT engine)
+Icons:                 Lucide React
+Language:              TypeScript
+Package Manager:       pnpm (monorepo optimized)
+State Management:      TanStack Query + Zustand
+Authentication:        NextAuth.js v5
+HTTP Client:           Fetch API (built-in)
+Database ORM:          Prisma (optional)
+Real-time:             Socket.io (optional)
+Testing:               Jest + Playwright
+Deployment:            Vercel / Docker / Node.js
+```
 
----
+### Why This Stack?
 
-## Why Next.js Instead of React?
-
-### Advantages for This Project
-
-| Feature | React + Vite | Next.js | Impact |
-|---------|--------------|---------|--------|
-| SSR/SSG | ❌ No | ✅ Yes | Better SEO, initial load |
-| API Routes | ❌ No | ✅ Yes | Server-side proxy for auth |
-| File Routing | ❌ No | ✅ Yes | Simpler structure |
-| Built-in Auth | ❌ No | ✅ NextAuth.js | JWT handling |
-| Image Optimization | ❌ No | ✅ Yes | Better performance |
-| Environment Variables | ⚠️ Manual | ✅ Built-in | Easier config |
-| Database Integration | ❌ No | ✅ Middleware-ready | Session store option |
-| Deployment | Basic | ✅ Vercel native | Easier DevOps |
-
-### Strategic Benefits
-
-1. **Authentication Proxy**: API routes can proxy requests to REST API with token handling
-2. **Rate Limiting**: Server-side rate limiting before hitting REST API
-3. **Server-Side Rendering**: Chat history can be pre-rendered for speed
-4. **WebSocket Support**: Real-time features easier to implement
-5. **Monorepo Ready**: Can run alongside backend in same repo/container
-6. **Vercel Integration**: Simple deployment to cloud
+| Library | Version | Why | Benefit |
+|---------|---------|-----|---------|
+| **Next.js** | 14+ | Latest App Router | Streaming, Server Components, Edge Runtime |
+| **shadcn/ui** | Latest | Radix + Tailwind v4 | Unstyled, accessible, fully customizable |
+| **Tailwind CSS** | v4 | Modern JIT engine | Smaller bundles, faster builds, better DX |
+| **Lucide React** | Latest | Modern icon library | 1000+ SVG icons, tree-shakeable, consistent |
+| **TanStack Query** | v5 | Best-in-class data fetching | Caching, synchronization, background updates |
+| **Zustand** | v4 | Simple state management | Lightweight, no boilerplate, TypeScript first |
+| **NextAuth.js** | v5 | New release | Better performance, edge support |
+| **TypeScript** | v5 | Strict mode | Full type safety across stack |
 
 ---
 
-## Architecture
+## Installation & Setup
+
+### 1. Create Next.js Project with Exact Stack
+
+```bash
+# Create with exact dependencies
+pnpm create next-app@latest pai-dashboard \
+  --typescript \
+  --tailwind \
+  --app \
+  --no-eslint
+
+cd pai-dashboard
+
+# Install additional dependencies
+pnpm add \
+  next-auth@5 \
+  @tanstack/react-query@5 \
+  zustand@4 \
+  lucide-react \
+  clsx \
+  tailwind-merge
+
+# Install shadcn/ui CLI and components
+pnpm add -D @shadcn-ui/cli
+
+# Initialize shadcn/ui
+pnpm dlx shadcn-ui@latest init -d
+```
+
+### 2. Configure Tailwind CSS v4
+
+Update `tailwind.config.ts`:
+
+```typescript
+import type { Config } from 'tailwindcss'
+
+const config: Config = {
+  content: [
+    './app/**/*.{js,ts,jsx,tsx}',
+    './components/**/*.{js,ts,jsx,tsx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // PAI theme colors
+        pai: {
+          primary: '#3b82f6',    // Bright blue
+          secondary: '#8b5cf6',  // Purple
+          accent: '#ec4899',     // Pink
+          dark: '#0f172a',       // Dark slate
+          light: '#f8fafc',      // Light slate
+        }
+      },
+      fontFamily: {
+        sans: ['var(--font-inter)'],
+      },
+    },
+  },
+  plugins: [],
+} satisfies Config
+
+export default config
+```
+
+### 3. Setup shadcn/ui Components
+
+```bash
+# Add commonly needed components for PAI dashboard
+pnpm dlx shadcn-ui@latest add button
+pnpm dlx shadcn-ui@latest add card
+pnpm dlx shadcn-ui@latest add input
+pnpm dlx shadcn-ui@latest add textarea
+pnpm dlx shadcn-ui@latest add select
+pnpm dlx shadcn-ui@latest add dialog
+pnpm dlx shadcn-ui@latest add dropdown-menu
+pnpm dlx shadcn-ui@latest add tabs
+pnpm dlx shadcn-ui@latest add avatar
+pnpm dlx shadcn-ui@latest add badge
+pnpm dlx shadcn-ui@latest add progress
+pnpm dlx shadcn-ui@latest add tooltip
+pnpm dlx shadcn-ui@latest add toast
+pnpm dlx shadcn-ui@latest add scroll-area
+```
+
+### 4. Environment Configuration
+
+Create `.env.local`:
+
+```env
+# API Integration
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Backend Security
+API_SECRET_KEY=your-secret-key-from-phase2
+API_TIMEOUT=30000
+
+# NextAuth.js v5
+NEXTAUTH_SECRET=generate-with-openssl-rand-base64-32
+NEXTAUTH_URL=http://localhost:3000
+
+# Optional Services
+TELEGRAM_BOT_TOKEN=your-telegram-token
+GITHUB_CLIENT_ID=your-github-id
+GITHUB_CLIENT_SECRET=your-github-secret
+```
+
+---
+
+## Architecture with shadcn/ui
+
+### Component Structure
+
+```typescript
+// components/ui/ - shadcn/ui components (generated, don't modify)
+// components/PAI/  - Custom PAI components using shadcn/ui
+
+// Example: Chat component using shadcn/ui Button
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card } from '@/components/ui/card'
+import { Send } from 'lucide-react'
+
+export function ChatInput() {
+  const [message, setMessage] = useState('')
+
+  return (
+    <Card className="p-4">
+      <div className="flex gap-2">
+        <Input
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Type your message..."
+          className="flex-1"
+        />
+        <Button size="icon" variant="default">
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </Card>
+  )
+}
+```
+
+### Color System with Tailwind v4
+
+```typescript
+// Use PAI theme colors
+<div className="bg-pai-primary text-pai-light">Primary</div>
+<div className="bg-pai-secondary text-pai-light">Secondary</div>
+<div className="bg-pai-accent text-white">Accent</div>
+
+// Responsive with Tailwind v4
+<div className="md:flex lg:grid-cols-3 dark:bg-pai-dark">
+  Responsive content
+</div>
+```
+
+### Icons with Lucide React
+
+```typescript
+import {
+  MessageSquare,
+  Brain,
+  Zap,
+  Settings,
+  LogOut,
+  Menu
+} from 'lucide-react'
+
+export function Navigation() {
+  return (
+    <nav className="flex gap-4">
+      <button><MessageSquare className="w-5 h-5" /></button>
+      <button><Brain className="w-5 h-5" /></button>
+      <button><Zap className="w-5 h-5" /></button>
+      <button><Settings className="w-5 h-5" /></button>
+    </nav>
+  )
+}
+```
+
+---
+
+## Project Structure
 
 ### Data Flow
 
