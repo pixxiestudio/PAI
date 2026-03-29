@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { authenticatedApiClient } from '@/lib/authenticated-api-client';
 
 export interface Memory {
   id: string;
@@ -23,7 +23,7 @@ export function useMemory(userId: string) {
   const memoriesQuery = useQuery({
     queryKey: ['memory', userId],
     queryFn: async () => {
-      const data = await apiClient.get<Memory[]>(
+      const data = await authenticatedApiClient.get<Memory[]>(
         `/users/${userId}/memories`
       );
       return data;
@@ -34,7 +34,7 @@ export function useMemory(userId: string) {
   // Save a memory
   const saveMemoryMutation = useMutation({
     mutationFn: async (memory: Omit<Memory, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
-      return apiClient.post<Memory>(
+      return authenticatedApiClient.post<Memory>(
         `/users/${userId}/memories`,
         memory
       );
@@ -49,7 +49,7 @@ export function useMemory(userId: string) {
   // Update memory importance
   const updateImportanceMutation = useMutation({
     mutationFn: async (data: { memoryId: string; importance: number }) => {
-      return apiClient.put<Memory>(
+      return authenticatedApiClient.put<Memory>(
         `/users/${userId}/memories/${data.memoryId}`,
         { importance: data.importance }
       );
@@ -64,7 +64,7 @@ export function useMemory(userId: string) {
   // Delete memory
   const deleteMemoryMutation = useMutation({
     mutationFn: async (memoryId: string) => {
-      return apiClient.delete(`/users/${userId}/memories/${memoryId}`);
+      return authenticatedApiClient.delete(`/users/${userId}/memories/${memoryId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

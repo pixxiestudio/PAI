@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { authenticatedApiClient } from '@/lib/authenticated-api-client';
 
 export interface Message {
   id: string;
@@ -29,7 +29,7 @@ export function useChat(sessionId: string) {
   const messagesQuery = useQuery({
     queryKey: ['chat', sessionId, 'messages'],
     queryFn: async () => {
-      const data = await apiClient.get<Message[]>(
+      const data = await authenticatedApiClient.get<Message[]>(
         `/sessions/${sessionId}/messages`
       );
       return data;
@@ -41,7 +41,7 @@ export function useChat(sessionId: string) {
   // Send a message
   const sendMessageMutation = useMutation({
     mutationFn: async (message: string) => {
-      return apiClient.post<Message>(
+      return authenticatedApiClient.post<Message>(
         `/sessions/${sessionId}/messages`,
         { content: message }
       );
@@ -77,7 +77,7 @@ export function useSessions(userId: string) {
   const sessionsQuery = useQuery({
     queryKey: ['chat', userId, 'sessions'],
     queryFn: async () => {
-      const data = await apiClient.get<ChatSession[]>(
+      const data = await authenticatedApiClient.get<ChatSession[]>(
         `/users/${userId}/sessions`
       );
       return data;
@@ -88,7 +88,7 @@ export function useSessions(userId: string) {
   // Create a new session
   const createSessionMutation = useMutation({
     mutationFn: async (title: string) => {
-      return apiClient.post<ChatSession>('/sessions', { title });
+      return authenticatedApiClient.post<ChatSession>('/sessions', { title });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

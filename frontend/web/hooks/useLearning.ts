@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { authenticatedApiClient } from '@/lib/authenticated-api-client';
 
 export interface LearningPattern {
   id: string;
@@ -34,7 +34,7 @@ export function useLearning(paiInstanceId: string) {
   const learningQuery = useQuery({
     queryKey: ['learning', paiInstanceId],
     queryFn: async () => {
-      const data = await apiClient.get<LearningReport>(
+      const data = await authenticatedApiClient.get<LearningReport>(
         `/pai/${paiInstanceId}/learning`
       );
       return data;
@@ -70,7 +70,7 @@ export function useSkills(paiInstanceId: string) {
   const skillsQuery = useQuery({
     queryKey: ['skills', paiInstanceId],
     queryFn: async () => {
-      const data = await apiClient.get<Skill[]>(
+      const data = await authenticatedApiClient.get<Skill[]>(
         `/pai/${paiInstanceId}/skills`
       );
       return data;
