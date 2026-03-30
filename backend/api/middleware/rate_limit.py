@@ -1,11 +1,13 @@
 """Rate Limiting Middleware for FastAPI
 
-Implements token bucket rate limiting to prevent API abuse.
+Implements token bucket rate limiting to prevent API abuse,
+plus per-user authentication rate limiting to prevent account enumeration.
 """
 
 import logging
 import time
 from typing import Dict, Tuple, Optional
+from datetime import datetime, timezone, timedelta
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from functools import lru_cache
@@ -127,6 +129,79 @@ class RateLimiter:
 
         if expired:
             logger.debug(f"Cleaned up {len(expired)} expired rate limit buckets")
+
+
+class AuthRateLimiter:
+    """Per-user authentication rate limiter to prevent account enumeration"""
+
+    def __init__(self, max_attempts: int = 5, window_seconds: int = 3600):
+        """
+        Initialize auth rate limiter
+
+        Args:
+            max_attempts: Maximum failed auth attempts per user per window
+            window_seconds: Time window in seconds (default 1 hour)
+        """
+        self.max_attempts = max_attempts
+        self.window_seconds = window_seconds
+        # Format: {identifier: [(timestamp, action), ...]}
+        self._attempts: Dict[str, list] = {}
+
+    def record_failed_attempt(self, identifier: str, action: str = "login") -> None:
+        """Record a failed authentication attempt"""
+        now = time.time()
+        if identifier not in self._attempts:
+            self._attempts[identifier] = []
+        self._attempts[identifier].append((now, action))
+        logger.warning(f"Failed {action} attempt for {identifier}")
+
+    def is_rate_limited(self, identifier: str, action: str = "login") -> bool:
+        """Check if identifier is rate limited for the given action"""
+        if identifier not in self._attempts:
+            return False
+
+        now = time.time()
+        window_start = now - self.window_seconds
+
+        # Remove old attempts outside window
+        self._attempts[identifier] = [
+            (ts, act) for ts, act in self._attempts[identifier]
+            if ts > window_start and act == action
+        ]
+
+        if len(self._attempts[identifier]) >= self.max_attempts:
+            logger.warning(f"Auth rate limit reached for {identifier} ({action})")
+            return True
+
+        return False
+
+    def reset_attempts(self, identifier: str, action: str = "login") -> None:
+        """Reset rate limit on successful authentication"""
+        if identifier in self._attempts:
+            self._attempts[identifier] = [
+                (ts, act) for ts, act in self._attempts[identifier]
+                if act != action
+            ]
+
+    def cleanup(self, threshold_seconds: int = 7200) -> int:
+        """Remove stale entries to prevent memory growth"""
+        now = time.time()
+        removed = 0
+        expired_keys = [
+            key for key, attempts in self._attempts.items()
+            if not attempts or all(now - ts > threshold_seconds for ts, _ in attempts)
+        ]
+        for key in expired_keys:
+            del self._attempts[key]
+            removed += 1
+        return removed
+
+
+# Global rate limiter instance
+@lru_cache(maxsize=1)
+def get_auth_rate_limiter() -> AuthRateLimiter:
+    """Get or create auth rate limiter instance"""
+    return AuthRateLimiter(max_attempts=5, window_seconds=3600)
 
 
 # Global rate limiter instance

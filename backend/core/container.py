@@ -41,6 +41,7 @@ from backend.core.memory import MemorySystem
 from backend.core.context import ContextManager
 from backend.core.learning import SelfLearningSystem
 from backend.core.personality import PersonalityManager
+from backend.core.token_revocation import TokenRevocationService
 from backend.integrations.skills.registry import SkillRegistry
 
 logger = logging.getLogger(__name__)
@@ -83,11 +84,34 @@ class ServiceContainer:
         self._personality_manager: Optional[PersonalityManager] = None
         self._skill_registry: Optional[SkillRegistry] = None
 
+        # Initialize token revocation (eager - needed for auth middleware)
+        self._redis_client = None
+        self._revocation_service = self._init_revocation_service()
+
         logger.debug(
             f"ServiceContainer initialized with "
             f"db_session={db_session is not None}, "
             f"config={self.config.app_name}"
         )
+
+    def _init_revocation_service(self) -> TokenRevocationService:
+        """Initialize token revocation service with Redis or in-memory fallback"""
+        if self.config.redis_enabled:
+            try:
+                import redis
+                self._redis_client = redis.from_url(
+                    self.config.redis_url,
+                    decode_responses=True
+                )
+                self._redis_client.ping()
+                logger.info("Redis connected - token revocation via Redis")
+                return TokenRevocationService(redis_client=self._redis_client)
+            except Exception as e:
+                logger.warning(f"Redis unavailable ({e}), using in-memory token revocation")
+                return TokenRevocationService(redis_client=None)
+        else:
+            logger.info("Redis disabled - using in-memory token revocation")
+            return TokenRevocationService(redis_client=None)
 
     def get_engine(self) -> PAIEngine:
         """
@@ -156,6 +180,15 @@ class ServiceContainer:
             self._personality_manager = PersonalityManager(db_session=self.db_session)
         return self._personality_manager
 
+    def get_revocation_service(self) -> TokenRevocationService:
+        """
+        Get the token revocation service
+
+        Returns:
+            TokenRevocationService instance (always available, uses fallback if no Redis)
+        """
+        return self._revocation_service
+
     def get_skill_registry(self) -> SkillRegistry:
         """
         Get or create SkillRegistry instance
@@ -214,6 +247,14 @@ class ServiceContainer:
             # Skills may have cleanup methods
             for skill_name in list(self._skill_registry.loaded_skills.keys()):
                 await self._skill_registry.unregister(skill_name)
+
+        # Close Redis connection if present
+        if self._redis_client:
+            try:
+                self._redis_client.close()
+                logger.debug("Redis connection closed")
+            except Exception as e:
+                logger.error(f"Error closing Redis connection: {e}")
 
         # Close database session if present
         if self.db_session:

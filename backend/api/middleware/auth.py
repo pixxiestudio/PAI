@@ -64,8 +64,22 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             payload = jwt_handler.verify_token(token)
             user_id = payload.get("user_id")
 
-            # Inject user_id into request state
+            # Check if token has been revoked (logout)
+            from backend.api.main import get_container
+            container = get_container()
+            if container:
+                revocation_service = container.get_revocation_service()
+                if revocation_service.is_revoked(token):
+                    logger.warning(f"Revoked token used for {request.url.path}")
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Token has been revoked",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+
+            # Inject user_id and raw token into request state
             request.state.user_id = user_id
+            request.state.token = token
             logger.debug(f"Authenticated user {user_id} for {request.url.path}")
 
         except jwt.ExpiredSignatureError:

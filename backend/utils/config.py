@@ -38,16 +38,20 @@ class Settings(BaseSettings):
         env="DATABASE_URL"
     )
     database_echo: bool = Field(default=False, env="DATABASE_ECHO")
+    database_pool_size: int = Field(default=20, env="DATABASE_POOL_SIZE")
+    database_max_overflow: int = Field(default=0, env="DATABASE_MAX_OVERFLOW")
+    database_pool_recycle: int = Field(default=3600, env="DATABASE_POOL_RECYCLE")
 
     # API Keys
     anthropic_api_key: Optional[str] = Field(default=None, env="ANTHROPIC_API_KEY")
     github_token: Optional[str] = Field(default=None, env="GITHUB_TOKEN")
 
-    # Redis Configuration (for Multi-PAI network)
+    # Redis Configuration (for token revocation + Multi-PAI network)
     redis_url: str = Field(
         default="redis://localhost:6379",
         env="REDIS_URL"
     )
+    redis_enabled: bool = Field(default=False, env="REDIS_ENABLED")
 
     # Model Configuration
     default_model: str = Field(default="claude-sonnet-4-6", env="DEFAULT_MODEL")

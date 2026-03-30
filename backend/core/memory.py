@@ -79,8 +79,12 @@ class MemorySystem:
         )
 
         if self.db_session:
-            self.db_session.add(memory_entry)
-            self.db_session.commit()
+            try:
+                self.db_session.add(memory_entry)
+                self.db_session.commit()
+            except Exception as e:
+                self.db_session.rollback()
+                logger.error(f"Failed to save message to memory: {e}")
 
         return memory_id
 
@@ -160,8 +164,12 @@ class MemorySystem:
         )
 
         if self.db_session:
-            self.db_session.add(memory_entry)
-            self.db_session.commit()
+            try:
+                self.db_session.add(memory_entry)
+                self.db_session.commit()
+            except Exception as e:
+                self.db_session.rollback()
+                logger.error(f"Failed to save learning memory: {e}")
 
         return memory_id
 

@@ -42,7 +42,10 @@ class SelfLearningSystem:
         input_data: Dict[str, Any],
         output_data: Dict[str, Any],
         success: bool,
-        quality_score: float = 0.0
+        quality_score: float = 0.0,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        message_id: Optional[str] = None
     ) -> str:
         """
         Record outcome of an interaction
@@ -54,6 +57,9 @@ class SelfLearningSystem:
             output_data: Output/result from PAI
             success: Whether interaction was successful
             quality_score: Quality score of response (0-1)
+            session_id: Session ID for traceability (links learning to conversation)
+            user_id: User ID for per-user learning analytics
+            message_id: Message ID for feedback loop linkage
 
         Returns:
             learning_id: ID of recorded learning
@@ -63,6 +69,9 @@ class SelfLearningSystem:
         learning_record = LearningModel(
             id=learning_id,
             pai_instance_id=pai_instance_id,
+            session_id=session_id,
+            user_id=user_id,
+            message_id=message_id,
             learning_type="outcome",
             content={
                 "interaction_type": interaction_type,
@@ -77,8 +86,12 @@ class SelfLearningSystem:
         )
 
         if self.db_session:
-            self.db_session.add(learning_record)
-            self.db_session.commit()
+            try:
+                self.db_session.add(learning_record)
+                self.db_session.commit()
+            except Exception as e:
+                self.db_session.rollback()
+                logger.error(f"Failed to record learning outcome: {e}")
 
         return learning_id
 
@@ -183,8 +196,12 @@ class SelfLearningSystem:
         )
 
         if self.db_session:
-            self.db_session.add(learning_record)
-            self.db_session.commit()
+            try:
+                self.db_session.add(learning_record)
+                self.db_session.commit()
+            except Exception as e:
+                self.db_session.rollback()
+                logger.error(f"Failed to detect pattern: {e}")
 
         return learning_id
 
@@ -257,8 +274,12 @@ class SelfLearningSystem:
         )
 
         if self.db_session:
-            self.db_session.add(learning_record)
-            self.db_session.commit()
+            try:
+                self.db_session.add(learning_record)
+                self.db_session.commit()
+            except Exception as e:
+                self.db_session.rollback()
+                logger.error(f"Failed to learn user preference: {e}")
 
         return learning_id
 
@@ -400,8 +421,12 @@ class SelfLearningSystem:
         )
 
         if self.db_session:
-            self.db_session.add(learning_record)
-            self.db_session.commit()
+            try:
+                self.db_session.add(learning_record)
+                self.db_session.commit()
+            except Exception as e:
+                self.db_session.rollback()
+                logger.error(f"Failed to extract skill: {e}")
 
         return learning_id
 

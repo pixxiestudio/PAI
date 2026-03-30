@@ -140,10 +140,72 @@ Always aim to be:
                     f"on PAI instance {pai_instance_id}"
                 )
             except Exception as e:
+                self.db_session.rollback()
                 logger.error(f"Error saving session to database: {str(e)}")
                 # Continue anyway - session exists in memory
 
         return session_id
+
+    async def ensure_session_loaded(self, session_id: str) -> bool:
+        """
+        Ensure session is loaded into memory from database.
+
+        If the session exists in the database but not in memory (e.g., after
+        server restart), it will be reloaded with its message history.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            True if session is available in memory, False if not found anywhere
+        """
+        if session_id in self.sessions:
+            return True
+
+        if not self.db_session:
+            return False
+
+        from backend.db.models import Session as SessionModel, Message as MessageModel
+
+        try:
+            db_session = (
+                self.db_session.query(SessionModel)
+                .filter(SessionModel.id == session_id)
+                .first()
+            )
+            if not db_session:
+                return False
+
+            # Load recent messages from database
+            db_messages = (
+                self.db_session.query(MessageModel)
+                .filter(MessageModel.session_id == session_id)
+                .order_by(MessageModel.created_at)
+                .all()
+            )
+
+            messages = [
+                {"role": msg.role or "user", "content": msg.content}
+                for msg in db_messages
+            ]
+
+            # Reconstruct in-memory session
+            self.sessions[session_id] = ConversationContext(
+                session_id=session_id,
+                user_id=db_session.user_id,
+                pai_instance_id=db_session.pai_instance_id,
+                messages=messages,
+                model=settings.default_model
+            )
+            logger.info(
+                f"Session {session_id} reloaded from database "
+                f"({len(messages)} messages)"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to reload session {session_id} from database: {e}")
+            return False
 
     async def send_message(
         self,
@@ -169,6 +231,10 @@ Always aim to be:
             InvalidMessageError: Message is empty
             MessageTooLongError: Message exceeds maximum length
         """
+        # Try to load session from DB if not in memory
+        if session_id not in self.sessions:
+            await self.ensure_session_loaded(session_id)
+
         # Validate session exists
         if session_id not in self.sessions:
             raise SessionNotFoundError(f"Session {session_id} not found")
@@ -265,6 +331,10 @@ Always aim to be:
         Yields:
             Response text chunks
         """
+        # Try to load session from DB if not in memory
+        if session_id not in self.sessions:
+            await self.ensure_session_loaded(session_id)
+
         if session_id not in self.sessions:
             raise SessionNotFoundError(f"Session {session_id} not found")
 
@@ -337,6 +407,10 @@ Always aim to be:
 
     async def get_session_history(self, session_id: str) -> List[Dict[str, str]]:
         """Get conversation history for a session"""
+        # Try to load session from DB if not in memory
+        if session_id not in self.sessions:
+            await self.ensure_session_loaded(session_id)
+
         if session_id not in self.sessions:
             raise SessionNotFoundError(f"Session {session_id} not found")
 
@@ -348,6 +422,10 @@ Always aim to be:
         n: int = settings.max_session_history
     ) -> List[Dict[str, str]]:
         """Get last N messages from a session"""
+        # Try to load session from DB if not in memory
+        if session_id not in self.sessions:
+            await self.ensure_session_loaded(session_id)
+
         if session_id not in self.sessions:
             raise SessionNotFoundError(f"Session {session_id} not found")
 

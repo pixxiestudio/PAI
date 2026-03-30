@@ -53,11 +53,19 @@ async def lifespan(app: FastAPI):
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
 
-        # Create database engine
-        engine = create_engine(
-            settings.database_url,
-            echo=settings.database_echo
-        )
+        # Create database engine with optimized pool configuration
+        pool_kwargs = {
+            "echo": settings.database_echo,
+            "pool_pre_ping": True,
+        }
+        # SQLite doesn't support pool_size/max_overflow
+        if not settings.database_url.startswith("sqlite"):
+            pool_kwargs.update({
+                "pool_size": settings.database_pool_size,
+                "max_overflow": settings.database_max_overflow,
+                "pool_recycle": settings.database_pool_recycle,
+            })
+        engine = create_engine(settings.database_url, **pool_kwargs)
 
         # Create session factory
         SessionLocal = sessionmaker(bind=engine)

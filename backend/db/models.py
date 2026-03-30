@@ -1,6 +1,6 @@
 """SQLAlchemy models for PAI database"""
 from sqlalchemy import (
-    Column, String, Integer, Float, DateTime, Boolean, Text, JSON, ForeignKey, Enum
+    Column, String, Integer, Float, DateTime, Boolean, Text, JSON, ForeignKey, Enum, Index
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -52,6 +52,9 @@ class Session(Base):
 class Message(Base):
     """Individual messages in a session"""
     __tablename__ = "messages"
+    __table_args__ = (
+        Index('idx_messages_session_created', 'session_id', 'created_at'),
+    )
 
     id = Column(String(36), primary_key=True)  # UUID
     session_id = Column(String(36), ForeignKey("sessions.id"), index=True)
@@ -84,6 +87,10 @@ class Activity(Base):
 class Memory(Base):
     """Layer 1 & 2 Memory storage"""
     __tablename__ = "memories"
+    __table_args__ = (
+        Index('idx_memory_user_type', 'user_id', 'memory_type'),
+        Index('idx_memory_session_type_created', 'session_id', 'memory_type', 'created_at'),
+    )
 
     id = Column(String(36), primary_key=True)  # UUID
     session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
@@ -168,9 +175,15 @@ class PAIInstance(Base):
 class Learning(Base):
     """Learning outcomes and patterns"""
     __tablename__ = "learning"
+    __table_args__ = (
+        Index('idx_learning_instance_type_created', 'pai_instance_id', 'learning_type', 'created_at'),
+    )
 
     id = Column(String(36), primary_key=True)  # UUID
     pai_instance_id = Column(String(255), ForeignKey("pai_instances.id"), index=True)
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
+    user_id = Column(String(255), nullable=True, index=True)
+    message_id = Column(String(36), ForeignKey("messages.id"), nullable=True)
     learning_type = Column(String(50), index=True)  # "outcome", "pattern", "preference", "skill"
     content = Column(JSON)
     effectiveness_score = Column(Float, index=True)  # How effective is this learning?
