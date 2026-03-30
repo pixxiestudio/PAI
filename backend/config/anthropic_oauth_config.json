@@ -1,0 +1,102 @@
+{
+  "anthropic_oauth": {
+    "enabled": true,
+    "provider": "anthropic",
+    "auth_method": "oauth2",
+    "description": "Anthropic API key access via subscription OAuth",
+
+    "oauth_config": {
+      "client_id": "YOUR_ANTHROPIC_OAUTH_CLIENT_ID",
+      "client_secret": "YOUR_ANTHROPIC_OAUTH_CLIENT_SECRET",
+      "redirect_uri": "http://localhost:3000/api/auth/callback",
+      "scope": ["anthropic-api:access"],
+      "auth_url": "https://api.anthropic.com/oauth/authorize",
+      "token_url": "https://api.anthropic.com/oauth/token"
+    },
+
+    "subscription_tiers": {
+      "free": {
+        "name": "Free",
+        "monthly_requests": 1000,
+        "max_tokens_per_request": 4096,
+        "concurrent_requests": 5,
+        "features": ["basic-chat", "simple-memory"],
+        "cost": 0
+      },
+      "pro": {
+        "name": "Pro",
+        "monthly_requests": 50000,
+        "max_tokens_per_request": 100000,
+        "concurrent_requests": 50,
+        "features": ["advanced-chat", "memory-system", "learning", "skills"],
+        "cost": 29.99,
+        "billing_cycle": "monthly"
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "monthly_requests": "unlimited",
+        "max_tokens_per_request": "unlimited",
+        "concurrent_requests": 500,
+        "features": ["all"],
+        "cost": "custom",
+        "contact_sales": true
+      }
+    },
+
+    "api_key_management": {
+      "strategy": "backend_proxy",
+      "description": "Backend holds master API key, proxies requests per user",
+      "options": [
+        "backend_proxy",
+        "user_temporary_keys",
+        "hybrid"
+      ]
+    },
+
+    "rate_limiting": {
+      "enabled": true,
+      "per_user": {
+        "requests_per_minute": 60,
+        "tokens_per_hour": 1000000
+      },
+      "global": {
+        "max_concurrent_requests": 100,
+        "queue_timeout_seconds": 30
+      }
+    },
+
+    "billing": {
+      "provider": "stripe",
+      "enabled": true,
+      "webhook_secret": "YOUR_STRIPE_WEBHOOK_SECRET",
+      "webhook_url": "http://localhost:8000/api/v1/billing/webhook",
+      "invoice_email": true,
+      "retry_failed_payments": true,
+      "retry_days": 3
+    },
+
+    "database": {
+      "tables_required": [
+        "users",
+        "subscriptions",
+        "api_usage",
+        "billing_history"
+      ]
+    },
+
+    "monitoring": {
+      "track_usage": true,
+      "alert_on_limit_reached": true,
+      "alert_email": true,
+      "usage_report_frequency": "weekly"
+    },
+
+    "security": {
+      "encrypt_api_keys": true,
+      "encrypt_algorithm": "fernet",
+      "token_expiry_hours": 24,
+      "refresh_token_expiry_days": 30,
+      "require_https": true
+    }
+  }
+}
